@@ -21,7 +21,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.tag }}
+          # Always use master for building (has latest fixes)
+          # The tag is only used for the release name, not the code
+          ref: master
           fetch-depth: 0
           fetch-tags: true
 
@@ -90,7 +92,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.tag }}
+          # Use master for downloading artifacts (tag is only for release name)
+          ref: master
           fetch-depth: 0
           fetch-tags: true
 
