@@ -116,7 +116,7 @@ def clean_lib_directory():
     
     if not os.path.exists(lib_dir):
         os.makedirs(lib_dir, exist_ok=True)
-        return
+        return True
     
     # Clean ALL .so files (they might be from wrong Python version)
     old_so_files = glob.glob(os.path.join(lib_dir, '*.so'))
@@ -242,6 +242,12 @@ def main():
         return 1
     
     if matching_dir:
+        # CRITICAL: Verify lib directory is still clean before copying
+        remaining_before = glob.glob(os.path.join('pc_ble_driver_py/lib', '*.so'))
+        if remaining_before:
+            print(f"✗ ERROR: lib/ directory not clean before copying! Found: {[os.path.basename(f) for f in remaining_before]}")
+            return 1
+        
         # Copy .so files
         so_files = glob.glob(os.path.join(matching_dir, '*.so'))
         if so_files:
@@ -249,11 +255,17 @@ def main():
             for so_file in so_files:
                 dest = os.path.join('pc_ble_driver_py/lib', os.path.basename(so_file))
                 shutil.copy2(so_file, dest)
-                # Verify the copied file is for correct Python version
-                if verify_so_python_version(dest, python_version):
-                    print(f"  ✓ Copied {os.path.basename(so_file)} (verified Python {python_version})")
-                else:
-                    print(f"  ⚠️  Copied {os.path.basename(so_file)} but Python version mismatch!")
+                # CRITICAL: Verify the copied file is for correct Python version
+                if not verify_so_python_version(dest, python_version):
+                    print(f"  ✗ ERROR: Copied {os.path.basename(so_file)} but Python version mismatch!")
+                    print(f"     This will cause segfaults! Aborting.")
+                    # Remove the bad file
+                    try:
+                        os.remove(dest)
+                    except:
+                        pass
+                    return 1
+                print(f"  ✓ Copied {os.path.basename(so_file)} (verified Python {python_version})")
         else:
             print("⚠️  No .so files found to copy")
         
