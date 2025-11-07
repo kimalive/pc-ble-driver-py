@@ -280,11 +280,31 @@ def main():
             for wrapper in wrapper_files:
                 dest = os.path.join('pc_ble_driver_py/lib', os.path.basename(wrapper))
                 shutil.copy2(wrapper, dest)
-                print(f"  Copied {os.path.basename(wrapper)}")
+                print(f"  ✓ Copied {os.path.basename(wrapper)}")
         else:
             print("⚠️  No Python wrapper files found to copy")
+        
+        # CRITICAL: Final verification - ensure all .so files are for correct Python version
+        final_so = glob.glob(os.path.join('pc_ble_driver_py/lib', '*.so'))
+        if not final_so:
+            print("✗ ERROR: No .so files in lib/ after build!")
+            return 1
+        
+        # Verify all .so files are linked to correct Python version
+        all_correct = True
+        for so_file in final_so:
+            if not verify_so_python_version(so_file, python_version):
+                print(f"✗ ERROR: {os.path.basename(so_file)} is linked to wrong Python version!")
+                all_correct = False
+        
+        if not all_correct:
+            print("✗ ERROR: Some .so files are linked to wrong Python version - this will cause segfaults!")
+            return 1
+        
+        print(f"✓ Build complete: {len(final_so)} .so file(s) verified for Python {python_version}")
     else:
-        print("⚠️  No build directory found")
+        print(f"✗ ERROR: No build directory found for Python {python_version}")
+        return 1
     
     # Install editable
     install_result = subprocess.run([
