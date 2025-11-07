@@ -176,10 +176,10 @@ def main():
         return 1
     
     # Check if we should use wheels
-    # Default: Build from source for all versions to ensure correct Python version linking
-    # Only use wheels if explicitly requested via TOX_USE_WHEELS=true
-    # This prevents using wheels built with wrong Python version
-    use_wheels = os.getenv('TOX_USE_WHEELS', 'false').lower() == 'true'
+    # Default: Use wheels from dist/ folder (pre-built)
+    # Only build from source if explicitly requested via TOX_BUILD_FROM_SOURCE=true
+    # This allows testing pre-built wheels without rebuilding
+    use_wheels = os.getenv('TOX_BUILD_FROM_SOURCE', 'false').lower() != 'true'
     
     if use_wheels:
         wheel = find_wheel()
@@ -212,13 +212,13 @@ def main():
                     if result.returncode == 0:
                         print(f"✓ Successfully installed wheel (verified Python {python_version})")
                     return result.returncode
+            else:
+                print("⚠️  No matching wheel found in dist/")
+                print("   Expected: dist/*{}-abi3-*{}*.whl".format(get_python_tag(), get_architecture()))
+                print("   Building from source as fallback...")
         else:
-            print("⚠️  No matching wheel found in dist/")
-            print("   Expected: dist/*{}-abi3-*{}*.whl".format(get_python_tag(), get_architecture()))
-            print("   Building from source as fallback...")
-    else:
-        print("Building from source (TOX_USE_WHEELS not set or false)")
-        print("   Set TOX_USE_WHEELS=true to test wheels")
+            print("Building from source (TOX_BUILD_FROM_SOURCE=true or no wheels found)")
+            print("   Set TOX_BUILD_FROM_SOURCE=false to use wheels from dist/")
     
     # CRITICAL: Clean _skbuild directory to ensure we get a fresh build for this Python version
     # Old build artifacts from different Python versions can cause cross-version contamination
@@ -316,11 +316,18 @@ def main():
             print("⚠️  No Python wrapper files found to copy")
         
         # CRITICAL: Ensure __init__.py exists so lib/ can be imported as a package
+        # This MUST be done before editable install, otherwise Python won't recognize lib/ as a package
         init_py = os.path.join('pc_ble_driver_py/lib', '__init__.py')
         if not os.path.exists(init_py):
             print(f"  ✓ Creating __init__.py in lib/ directory")
             with open(init_py, 'w') as f:
                 f.write('# Package marker file for pc_ble_driver_py.lib\n')
+        else:
+            # Ensure it's not empty (in case it was created but is empty)
+            if os.path.getsize(init_py) == 0:
+                print(f"  ✓ Recreating __init__.py in lib/ directory (was empty)")
+                with open(init_py, 'w') as f:
+                    f.write('# Package marker file for pc_ble_driver_py.lib\n')
         
         # CRITICAL: Final verification - ensure all .so files are for correct Python version
         final_so = glob.glob(os.path.join('pc_ble_driver_py/lib', '*.so'))
