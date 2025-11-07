@@ -83,7 +83,68 @@ def find_wheel():
     
     return None
 
+def verify_so_python_version(so_file, expected_version):
+    """Verify that .so file is linked to the correct Python version."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ['otool', '-L', so_file],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        # Check if it's linked to the expected Python version
+        expected_lib = f"libpython{expected_version}.dylib"
+        if expected_lib in result.stdout or f"Python.framework/Versions/{expected_version}" in result.stdout:
+            return True
+        # If linked to wrong version, return False
+        for line in result.stdout.split('\n'):
+            if 'libpython' in line or 'Python.framework' in line:
+                print(f"  ⚠️  {os.path.basename(so_file)} is linked to wrong Python version:")
+                print(f"     {line.strip()}")
+                print(f"     Expected: {expected_lib}")
+                return False
+        return True  # No Python library found (might be statically linked)
+    except Exception as e:
+        print(f"  ⚠️  Could not verify {os.path.basename(so_file)}: {e}")
+        return True  # Assume OK if we can't check
+
 def main():
+    # CRITICAL: Clean old .so files first to prevent cross-version contamination
+    # This MUST happen before any build or wheel installation
+    lib_dir = 'pc_ble_driver_py/lib'
+    python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
+    
+    if os.path.exists(lib_dir):
+        # Clean ALL .so files (they might be from wrong Python version)
+        old_so_files = glob.glob(os.path.join(lib_dir, '*.so'))
+        if old_so_files:
+            print(f"🧹 Cleaning {len(old_so_files)} old .so file(s) to prevent version mismatch...")
+            for old_so in old_so_files:
+                # Verify before removing (for debugging)
+                if not verify_so_python_version(old_so, python_version):
+                    print(f"  ⚠️  Removing incompatible .so file: {os.path.basename(old_so)}")
+                os.remove(old_so)
+                print(f"  ✓ Removed {os.path.basename(old_so)}")
+        
+        # Also clean old Python wrapper files
+        old_py_files = [f for f in glob.glob(os.path.join(lib_dir, '*.py')) 
+                       if os.path.basename(f) in ['nrf_ble_driver_sd_api_v2.py', 'nrf_ble_driver_sd_api_v5.py', '__init__.py']]
+        if old_py_files:
+            print(f"🧹 Cleaning {len(old_py_files)} old Python wrapper file(s)...")
+            for old_py in old_py_files:
+                os.remove(old_py)
+                print(f"  ✓ Removed {os.path.basename(old_py)}")
+        
+        # Verify directory is clean
+        remaining_so = glob.glob(os.path.join(lib_dir, '*.so'))
+        if remaining_so:
+            print(f"  ⚠️  WARNING: {len(remaining_so)} .so file(s) still remain after cleaning!")
+            for so in remaining_so:
+                print(f"     {os.path.basename(so)}")
+        else:
+            print(f"  ✓ lib/ directory is clean")
+    
     # Check if we should use wheels
     # Default: Use wheels for Python 3.12 (has import issues with source build)
     # For other versions, build from source by default
@@ -118,25 +179,6 @@ def main():
     # Copy libraries (prefer matching Python version)
     import shutil
     import platform
-    python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
-    
-    # CRITICAL: Clean old .so files first to prevent using wrong Python version's libraries
-    lib_dir = 'pc_ble_driver_py/lib'
-    if os.path.exists(lib_dir):
-        old_so_files = glob.glob(os.path.join(lib_dir, '*.so'))
-        if old_so_files:
-            print(f"Cleaning {len(old_so_files)} old .so file(s) to prevent version mismatch...")
-            for old_so in old_so_files:
-                os.remove(old_so)
-                print(f"  Removed {os.path.basename(old_so)}")
-        # Also clean old Python wrapper files
-        old_py_files = [f for f in glob.glob(os.path.join(lib_dir, '*.py')) 
-                       if os.path.basename(f) in ['nrf_ble_driver_sd_api_v2.py', 'nrf_ble_driver_sd_api_v5.py', '__init__.py']]
-        if old_py_files:
-            print(f"Cleaning {len(old_py_files)} old Python wrapper file(s)...")
-            for old_py in old_py_files:
-                os.remove(old_py)
-                print(f"  Removed {os.path.basename(old_py)}")
     
     # Find build directory for current Python version
     # Pattern: _skbuild/macosx-*-arm64-{version}/cmake-install/...
@@ -159,21 +201,21 @@ def main():
         # Force a rebuild by returning error, which will cause setup.py build to run again
         return 1
     
-            if matching_dir:
-                # Copy .so files
-                so_files = glob.glob(os.path.join(matching_dir, '*.so'))
-                if so_files:
-                    print(f"Copying {len(so_files)} .so file(s) to pc_ble_driver_py/lib/")
-                    for so_file in so_files:
-                        dest = os.path.join('pc_ble_driver_py/lib', os.path.basename(so_file))
-                        shutil.copy2(so_file, dest)
-                        # Verify the copied file is for correct Python version
-                        if verify_so_python_version(dest, python_version):
-                            print(f"  ✓ Copied {os.path.basename(so_file)} (verified Python {python_version})")
-                        else:
-                            print(f"  ⚠️  Copied {os.path.basename(so_file)} but Python version mismatch!")
+    if matching_dir:
+        # Copy .so files
+        so_files = glob.glob(os.path.join(matching_dir, '*.so'))
+        if so_files:
+            print(f"Copying {len(so_files)} .so file(s) to pc_ble_driver_py/lib/")
+            for so_file in so_files:
+                dest = os.path.join('pc_ble_driver_py/lib', os.path.basename(so_file))
+                shutil.copy2(so_file, dest)
+                # Verify the copied file is for correct Python version
+                if verify_so_python_version(dest, python_version):
+                    print(f"  ✓ Copied {os.path.basename(so_file)} (verified Python {python_version})")
                 else:
-                    print("⚠️  No .so files found to copy")
+                    print(f"  ⚠️  Copied {os.path.basename(so_file)} but Python version mismatch!")
+        else:
+            print("⚠️  No .so files found to copy")
         
         # Copy Python wrapper files (only from matching build directory)
         wrapper_files = glob.glob(os.path.join(matching_dir, '*.py'))
