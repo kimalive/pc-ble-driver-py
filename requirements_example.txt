@@ -1,0 +1,21 @@
+# Example requirements.txt for using pc-ble-driver-py from GitHub Releases
+#
+# Replace VERSION with your release version (e.g., 0.17.10)
+# Replace PYTHON_VERSION with your Python version (e.g., cp312 for Python 3.12)
+# Replace ARCH with your architecture (x86_64 for Intel Mac, arm64 for Apple Silicon)
+
+# Option 1: Direct wheel URL (recommended)
+# For x86_64 (Intel Mac)
+pc_ble_driver_py @ https://github.com/kimalive/pc-ble-driver-py/releases/download/v0.17.10/pc_ble_driver_py-0.17.10-cp312-abi3-macosx_26_0_x86_64.whl
+
+# For ARM64 (Apple Silicon)
+# pc_ble_driver_py @ https://github.com/kimalive/pc-ble-driver-py/releases/download/v0.17.10/pc_ble_driver_py-0.17.10-cp312-abi3-macosx_26_0_arm64.whl
+
+# Option 2: Platform-specific (using environment markers)
+# This automatically selects the right wheel based on platform
+# pc_ble_driver_py @ https://github.com/kimalive/pc-ble-driver-py/releases/download/v0.17.10/pc_ble_driver_py-0.17.10-cp312-abi3-macosx_26_0_x86_64.whl; platform_machine == "x86_64"
+# pc_ble_driver_py @ https://github.com/kimalive/pc-ble-driver-py/releases/download/v0.17.10/pc_ble_driver_py-0.17.10-cp312-abi3-macosx_26_0_arm64.whl; platform_machine == "arm64"
+
+# Dependencies
+wrapt>=1.0.0
+cryptography>=3.0.0

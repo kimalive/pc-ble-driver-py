@@ -1,0 +1,125 @@
+name: Create Release with Wheels
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., 0.17.10)'
+        required: true
+        type: string
+      tag:
+        description: 'Git tag (e.g., v0.17.10)'
+        required: true
+        type: string
+jobs:
+  build-x86_64:
+    name: Build x86_64 Wheels
+    runs-on: macos-13
+    strategy:
+      matrix:
+        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13']
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag }}
+
+      - name: Setup Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install vcpkg
+        run: |
+          git clone https://github.com/Microsoft/vcpkg.git
+          cd vcpkg
+          ./bootstrap-vcpkg.sh
+
+      - name: Install nrf-ble-driver (x64-osx)
+        run: |
+          ./vcpkg/vcpkg install nrf-ble-driver --triplet x64-osx
+
+      - name: Install build dependencies
+        run: |
+          brew install swig
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install scikit-build ninja cmake wrapt cryptography
+
+      - name: Build x86_64 wheel
+        env:
+          VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+          CMAKE_TOOLCHAIN_FILE: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
+          CMAKE_PREFIX_PATH: ${{ github.workspace }}/vcpkg/installed/x64-osx
+        run: |
+          python setup.py bdist_wheel --build-type Release -- \
+            -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+            -DPYTHON_EXECUTABLE="$(which python)" \
+            -DPython3_FIND_STRATEGY=LOCATION \
+            -DPython3_FIND_REGISTRY=NEVER \
+            -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON
+
+      - name: Bundle dependencies into wheel
+        if: success()
+        env:
+          VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+          VCPKG_TRIPLET: x64-osx
+        run: |
+          WHEEL=$(ls -t dist/pc_ble_driver_py-*-cp38-abi3-*x86_64*.whl 2>/dev/null | head -1)
+          if [ -n "$WHEEL" ] && [ -f "$WHEEL" ]; then
+            python ${{ github.workspace }}/bundle_into_wheel.py "$WHEEL" || echo "Bundling skipped (optional)"
+          fi
+
+      - name: Upload x86_64 wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-x86_64-py${{ matrix.python-version }}
+          path: dist/*x86_64*.whl
+          if-no-files-found: warn
+
+  create-release:
+    name: Create Release
+    needs: build-x86_64
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag }}
+
+      - name: Download x86_64 wheels
+        uses: actions/download-artifact@v4
+        with:
+          path: wheels/x86_64
+          pattern: wheel-x86_64-*
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag }}
+          name: Release ${{ github.event.inputs.version }}
+          body: |
+            Release ${{ github.event.inputs.version }}
+            
+            ## Wheels Included
+            
+            ### x86_64 (Intel Mac)
+            - Python 3.8, 3.9, 3.10, 3.11, 3.12, 3.13
+            
+            ### ARM64 (Apple Silicon)
+            - Build ARM64 wheels locally and upload manually, or use the build_wheels.sh script
+            
+            ## Installation
+            
+            ```bash
+            pip install https://github.com/kimalive/pc-ble-driver-py/releases/download/${{ github.event.inputs.tag }}/pc_ble_driver_py-${{ github.event.inputs.version }}-cp312-abi3-macosx_26_0_x86_64.whl
+            ```
+            
+            Replace `cp312` and `x86_64` with your Python version and architecture.
+          files: wheels/x86_64/*.whl
+          draft: false
+          prerelease: false
+
