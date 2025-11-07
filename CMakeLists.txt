@@ -37,6 +37,53 @@ if(WIN32)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_hypot=hypot")
 endif()
 
+# Configure rpath for macOS to support different Python installations (Homebrew, pyenv, framework)
+if(APPLE)
+    set(CMAKE_MACOSX_RPATH ON)
+    # Initialize CMAKE_INSTALL_RPATH
+    set(CMAKE_INSTALL_RPATH "")
+    # Get Python library directory for rpath
+    if(PYTHON_LIBRARY)
+        get_filename_component(PYTHON_LIBRARY_DIR ${PYTHON_LIBRARY} DIRECTORY)
+        # Add Python library directory to install rpath
+        set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_RPATH};${PYTHON_LIBRARY_DIR}")
+        # Also add @loader_path for relative loading
+        set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_RPATH};@loader_path")
+        message(VERBOSE "Python library directory for rpath: ${PYTHON_LIBRARY_DIR}")
+    endif()
+    # Add vcpkg library path to rpath if available (for nrf-ble-driver dependencies)
+    # Check both CMake variable and environment variable
+    if(CMAKE_PREFIX_PATH)
+        set(VCPKG_PREFIX "${CMAKE_PREFIX_PATH}")
+    elseif(DEFINED ENV{CMAKE_PREFIX_PATH})
+        set(VCPKG_PREFIX "$ENV{CMAKE_PREFIX_PATH}")
+    elseif(DEFINED ENV{VCPKG_ROOT})
+        # Fallback: derive from VCPKG_ROOT
+        set(VCPKG_PREFIX "$ENV{VCPKG_ROOT}/installed/arm64-osx")
+    endif()
+    
+    if(VCPKG_PREFIX)
+        # VCPKG_PREFIX might be something like /path/to/vcpkg/installed/arm64-osx
+        # We need the lib subdirectory
+        set(VCPKG_LIB_DIR "${VCPKG_PREFIX}/lib")
+        if(EXISTS "${VCPKG_LIB_DIR}")
+            if(CMAKE_INSTALL_RPATH)
+                set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_RPATH};${VCPKG_LIB_DIR}")
+            else()
+                set(CMAKE_INSTALL_RPATH "${VCPKG_LIB_DIR}")
+            endif()
+            message(STATUS "Added vcpkg library directory to rpath: ${VCPKG_LIB_DIR}")
+        else()
+            message(VERBOSE "VCPKG_LIB_DIR not found: ${VCPKG_LIB_DIR}")
+        endif()
+    else()
+        message(VERBOSE "CMAKE_PREFIX_PATH not set, skipping vcpkg rpath")
+    endif()
+    # Enable @rpath in build rpath as well
+    set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
+    message(VERBOSE "CMAKE_INSTALL_RPATH: ${CMAKE_INSTALL_RPATH}")
+endif()
+
 set(PC_BLE_DRIVER_PY_OUTDIR ${CMAKE_BINARY_DIR}/outdir)
 set(NRF_BLE_DRIVER_VERSION "4.1.100")
 
@@ -50,7 +97,12 @@ find_package(SWIG 4.2.0 REQUIRED)
 include(${SWIG_USE_FILE})
 
 # nrf-ble-driver
-find_package(nrf-ble-driver ${NRF_BLE_DRIVER_VERSION} EXACT CONFIG REQUIRED)
+# Try to find with exact version first, fall back to any version if using vcpkg
+if(DEFINED ENV{VCPKG_ROOT})
+    find_package(nrf-ble-driver CONFIG REQUIRED)
+else()
+    find_package(nrf-ble-driver ${NRF_BLE_DRIVER_VERSION} EXACT CONFIG REQUIRED)
+endif()
 
 # PYTHON_INCLUDE_DIR provided by scikit-build
 include_directories(${PYTHON_INCLUDE_DIR})
@@ -128,6 +180,94 @@ foreach(SD_API_VER ${SD_API_VERS})
     message(VERBOSE STATUS "LINK_LIBRARIES are ${LINK_LIBRARIES}")
 
     target_link_libraries(${PYTHON_MODULE_${SD_API_VER}} PRIVATE ${LINK_LIBRARIES})
+    
+    # For macOS, fix the Python library path to use @rpath after linking
+    if(APPLE)
+        # Determine Python library path from PYTHON_EXECUTABLE to ensure we use the correct Python
+        # This is critical because PYTHON_LIBRARY_FROM_USER_FLAGS might point to the wrong Python version
+        set(PYTHON_LIB_TO_FIX "")
+        set(PYTHON_LIB_RPATH_NAME "")
+        set(PYTHON_FRAMEWORK_PATH "")
+        
+        if(PYTHON_EXECUTABLE)
+            # Use Python to determine its own library path and version
+            execute_process(
+                COMMAND ${PYTHON_EXECUTABLE} -c "import sysconfig; import sys; libdir = sysconfig.get_config_var('LIBDIR'); libfile = sysconfig.get_config_var('LIBRARY'); libpath = f'{libdir}/{libfile}' if libfile else libdir; print(libpath); print(f'{sys.version_info.major}.{sys.version_info.minor}')"
+                OUTPUT_VARIABLE PYTHON_LIB_INFO
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+                ERROR_QUIET
+            )
+            if(PYTHON_LIB_INFO)
+                # Parse output: first line is library path, second line is version
+                string(REPLACE "\n" ";" PYTHON_LIB_INFO_LIST "${PYTHON_LIB_INFO}")
+                list(GET PYTHON_LIB_INFO_LIST 0 PYTHON_LIB_PATH_FROM_EXE)
+                list(GET PYTHON_LIB_INFO_LIST 1 PYTHON_VERSION_MAJOR_MINOR)
+                
+                if(EXISTS "${PYTHON_LIB_PATH_FROM_EXE}")
+                    set(PYTHON_LIB_TO_FIX "${PYTHON_LIB_PATH_FROM_EXE}")
+                    # Determine @rpath name based on library type
+                    get_filename_component(PYTHON_LIB_NAME ${PYTHON_LIB_PATH_FROM_EXE} NAME)
+                    if(PYTHON_LIB_NAME MATCHES "libpython([0-9]+\\.[0-9]+)\\.dylib")
+                        set(PYTHON_LIB_RPATH_NAME "@rpath/libpython${PYTHON_VERSION_MAJOR_MINOR}.dylib")
+                    elseif(PYTHON_LIB_NAME STREQUAL "Python" OR PYTHON_LIB_PATH_FROM_EXE MATCHES "Python.framework")
+                        set(PYTHON_LIB_RPATH_NAME "@rpath/Python")
+                        # Extract framework path
+                        string(REGEX REPLACE "/lib/.*" "/Python" PYTHON_FRAMEWORK_PATH "${PYTHON_LIB_PATH_FROM_EXE}")
+                    else()
+                        set(PYTHON_LIB_RPATH_NAME "@rpath/${PYTHON_LIB_NAME}")
+                    endif()
+                    message(STATUS "Determined Python library from PYTHON_EXECUTABLE: ${PYTHON_LIB_TO_FIX} -> ${PYTHON_LIB_RPATH_NAME}")
+                endif()
+            endif()
+        endif()
+        
+        # Fallback to PYTHON_LIBRARY_FROM_USER_FLAGS if we couldn't determine from PYTHON_EXECUTABLE
+        if(NOT PYTHON_LIB_TO_FIX AND PYTHON_LIBRARY_FROM_USER_FLAGS)
+            set(PYTHON_LIB_TO_FIX "${PYTHON_LIBRARY_FROM_USER_FLAGS}")
+            get_filename_component(PYTHON_LIB_NAME ${PYTHON_LIBRARY_FROM_USER_FLAGS} NAME)
+            get_filename_component(PYTHON_LIB_DIR ${PYTHON_LIBRARY_FROM_USER_FLAGS} DIRECTORY)
+            
+            if(PYTHON_LIB_NAME MATCHES "libpython([0-9]+\\.[0-9]+)\\.dylib")
+                set(PYTHON_VERSION_MAJOR_MINOR ${CMAKE_MATCH_1})
+                set(PYTHON_LIB_RPATH_NAME "@rpath/libpython${PYTHON_VERSION_MAJOR_MINOR}.dylib")
+            elseif(PYTHON_LIB_NAME STREQUAL "Python")
+                set(PYTHON_LIB_RPATH_NAME "@rpath/Python")
+            else()
+                set(PYTHON_LIB_RPATH_NAME "@rpath/${PYTHON_LIB_NAME}")
+            endif()
+            
+            if(PYTHON_LIB_DIR MATCHES "Python.framework")
+                string(REGEX REPLACE "/lib/.*" "/Python" PYTHON_FRAMEWORK_PATH "${PYTHON_LIBRARY_FROM_USER_FLAGS}")
+            endif()
+            message(STATUS "Using Python library from PYTHON_LIBRARY_FROM_USER_FLAGS: ${PYTHON_LIB_TO_FIX} -> ${PYTHON_LIB_RPATH_NAME}")
+        endif()
+        
+        if(PYTHON_LIB_TO_FIX AND PYTHON_LIB_RPATH_NAME)
+            message(VERBOSE "Fixing Python library path: ${PYTHON_LIB_TO_FIX} -> ${PYTHON_LIB_RPATH_NAME}")
+            
+            # Add a post-build step to change the install name using install_name_tool
+            # This changes the hardcoded absolute path to @rpath, which Python will resolve
+            # using its own rpath configuration at runtime
+            # Also ensure Python library directory is in rpath
+            if(PYTHON_FRAMEWORK_PATH AND NOT PYTHON_FRAMEWORK_PATH STREQUAL PYTHON_LIB_TO_FIX)
+                add_custom_command(TARGET ${PYTHON_MODULE_${SD_API_VER}} POST_BUILD
+                    COMMAND install_name_tool -change "${PYTHON_LIB_TO_FIX}" "${PYTHON_LIB_RPATH_NAME}" "$<TARGET_FILE:${PYTHON_MODULE_${SD_API_VER}}>" || true
+                    COMMAND install_name_tool -change "${PYTHON_FRAMEWORK_PATH}" "${PYTHON_LIB_RPATH_NAME}" "$<TARGET_FILE:${PYTHON_MODULE_${SD_API_VER}}>" || true
+                    COMMAND sh -c "if ! otool -l \"$<TARGET_FILE:${PYTHON_MODULE_${SD_API_VER}}>\" 2>/dev/null | grep -q \"path ${PYTHON_LIBRARY_DIR}\"; then install_name_tool -add_rpath \"${PYTHON_LIBRARY_DIR}\" \"$<TARGET_FILE:${PYTHON_MODULE_${SD_API_VER}}>\" 2>/dev/null || true; fi"
+                    COMMENT "Fixing Python library path to use @rpath and ensuring Python lib dir is in rpath"
+                    VERBATIM
+                )
+            else()
+                add_custom_command(TARGET ${PYTHON_MODULE_${SD_API_VER}} POST_BUILD
+                    COMMAND install_name_tool -change "${PYTHON_LIB_TO_FIX}" "${PYTHON_LIB_RPATH_NAME}" "$<TARGET_FILE:${PYTHON_MODULE_${SD_API_VER}}>" || true
+                    COMMAND sh -c "if ! otool -l \"$<TARGET_FILE:${PYTHON_MODULE_${SD_API_VER}}>\" 2>/dev/null | grep -q \"path ${PYTHON_LIBRARY_DIR}\"; then install_name_tool -add_rpath \"${PYTHON_LIBRARY_DIR}\" \"$<TARGET_FILE:${PYTHON_MODULE_${SD_API_VER}}>\" 2>/dev/null || true; fi"
+                    COMMENT "Fixing Python library path to use @rpath and ensuring Python lib dir is in rpath"
+                    VERBATIM
+                )
+            endif()
+        endif()
+    endif()
+    
     target_compile_definitions(${PYTHON_MODULE_${SD_API_VER}} PRIVATE NRF_SD_BLE_API_VERSION=${SD_API_VER})
 
     get_target_property(CONNECTIVITY_SD_API_V${SD_API_VER}_PATH nrf::nrf_ble_driver_sd_api_v${SD_API_VER}_${NRF_BLE_DRIVER_LINKAGE_TYPE} INTERFACE_INCLUDE_DIRECTORIES)

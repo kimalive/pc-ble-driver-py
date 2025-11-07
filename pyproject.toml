@@ -1,6 +1,10 @@
 [build-system]
 requires = ["setuptools", "wheel", "scikit-build", "cmake", "swig", "ninja", "tox"]
 
+# Note: License is specified in setup.py
+# License classifiers in setup.py are deprecated in favor of SPDX expressions,
+# but we're using setup.py for package metadata, so the license field there is sufficient
+
 [flake8]
 exclude = [
     "hex",

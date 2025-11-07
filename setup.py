@@ -92,13 +92,16 @@ setup(
         "Topic :: System :: Networking",
         "Topic :: System :: Hardware :: Hardware Drivers",
         "Topic :: Software Development :: Embedded Systems",
-        "License :: Other/Proprietary License",
+        # Note: License classifier removed (deprecated by setuptools)
+        # License is specified via the 'license' parameter above and in pyproject.toml
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
     ],
     keywords="nordic nrf51 nrf52 ble bluetooth softdevice serialization bindings pc-ble-driver pc-ble-driver-py "
     "pc_ble_driver pc_ble_driver_py",
