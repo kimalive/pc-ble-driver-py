@@ -133,9 +133,9 @@ def clean_lib_directory():
             except Exception as e:
                 print(f"  ✗ Failed to remove {os.path.basename(old_so)}: {e}")
     
-    # Also clean old Python wrapper files
+    # Also clean old Python wrapper files (but NOT __init__.py - we need that!)
     old_py_files = [f for f in glob.glob(os.path.join(lib_dir, '*.py')) 
-                   if os.path.basename(f) in ['nrf_ble_driver_sd_api_v2.py', 'nrf_ble_driver_sd_api_v5.py', '__init__.py']]
+                   if os.path.basename(f) in ['nrf_ble_driver_sd_api_v2.py', 'nrf_ble_driver_sd_api_v5.py']]
     if old_py_files:
         print(f"🧹 Cleaning {len(old_py_files)} old Python wrapper file(s)...")
         for old_py in old_py_files:
@@ -144,6 +144,13 @@ def clean_lib_directory():
                 print(f"  ✓ Removed {os.path.basename(old_py)}")
             except Exception as e:
                 print(f"  ✗ Failed to remove {os.path.basename(old_py)}: {e}")
+    
+    # CRITICAL: Ensure __init__.py exists so lib/ can be imported as a package
+    init_py = os.path.join(lib_dir, '__init__.py')
+    if not os.path.exists(init_py):
+        print(f"  ✓ Creating __init__.py in lib/ directory")
+        with open(init_py, 'w') as f:
+            f.write('# Package marker file for pc_ble_driver_py.lib\n')
     
     # Verify directory is clean - CRITICAL: fail if not clean
     remaining_so = glob.glob(os.path.join(lib_dir, '*.so'))
