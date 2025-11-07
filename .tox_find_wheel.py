@@ -159,16 +159,21 @@ def main():
         # Force a rebuild by returning error, which will cause setup.py build to run again
         return 1
     
-    if matching_dir:
-        # Copy .so files
-        so_files = glob.glob(os.path.join(matching_dir, '*.so'))
-        if so_files:
-            print(f"Copying {len(so_files)} .so file(s) to pc_ble_driver_py/lib/")
-            for so_file in so_files:
-                shutil.copy2(so_file, 'pc_ble_driver_py/lib/')
-                print(f"  Copied {os.path.basename(so_file)}")
-        else:
-            print("⚠️  No .so files found to copy")
+            if matching_dir:
+                # Copy .so files
+                so_files = glob.glob(os.path.join(matching_dir, '*.so'))
+                if so_files:
+                    print(f"Copying {len(so_files)} .so file(s) to pc_ble_driver_py/lib/")
+                    for so_file in so_files:
+                        dest = os.path.join('pc_ble_driver_py/lib', os.path.basename(so_file))
+                        shutil.copy2(so_file, dest)
+                        # Verify the copied file is for correct Python version
+                        if verify_so_python_version(dest, python_version):
+                            print(f"  ✓ Copied {os.path.basename(so_file)} (verified Python {python_version})")
+                        else:
+                            print(f"  ⚠️  Copied {os.path.basename(so_file)} but Python version mismatch!")
+                else:
+                    print("⚠️  No .so files found to copy")
         
         # Copy Python wrapper files (only from matching build directory)
         wrapper_files = glob.glob(os.path.join(matching_dir, '*.py'))
