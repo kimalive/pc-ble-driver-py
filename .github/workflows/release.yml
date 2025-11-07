@@ -75,17 +75,62 @@ jobs:
             -DPython3_FIND_VIRTUALENV=ONLY \
             -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON
 
+      - name: Rename wheel to preserve Python version
+        if: success()
+        run: |
+          # Find the wheel that was just built (it will have cp38-abi3 tag internally)
+          WHEEL=$(ls -t dist/pc_ble_driver_py-*-cp38-abi3-*x86_64*.whl 2>/dev/null | head -1)
+          if [ -z "$WHEEL" ]; then
+            # Fallback: try any cp*-abi3 pattern
+            WHEEL=$(ls -t dist/pc_ble_driver_py-*-cp*-abi3-*x86_64*.whl 2>/dev/null | head -1)
+          fi
+          if [ -z "$WHEEL" ]; then
+            # Fallback: try without abi3 tag
+            WHEEL=$(ls -t dist/pc_ble_driver_py-*-*x86_64*.whl 2>/dev/null | head -1)
+          fi
+          if [ -n "$WHEEL" ] && [ -f "$WHEEL" ]; then
+            # Extract Python version tag (e.g., "3.8" -> "cp38", "3.12" -> "cp312")
+            PYTHON_TAG="cp${{ matrix.python-version }}"
+            # Remove dots from version for tag (3.10 -> cp310)
+            PYTHON_TAG=$(echo "$PYTHON_TAG" | sed 's/\.//g')
+            # Get version from package __init__.py (most reliable)
+            VERSION=$(python -c "import sys; sys.path.insert(0, '.'); from pc_ble_driver_py import __version__; print(__version__)" 2>/dev/null)
+            if [ -z "$VERSION" ]; then
+              # Fallback: extract from wheel filename
+              BASE_NAME=$(basename "$WHEEL" .whl)
+              VERSION=$(echo "$BASE_NAME" | sed -n 's/.*pc_ble_driver_py-\([0-9.]*\)-.*/\1/p')
+            fi
+            if [ -z "$VERSION" ]; then
+              echo "Error: Could not determine package version"
+              exit 1
+            fi
+            # Create new name with correct Python tag
+            NEW_WHEEL="dist/pc_ble_driver_py-${VERSION}-${PYTHON_TAG}-abi3-macosx_26_0_x86_64.whl"
+            if [ "$WHEEL" != "$NEW_WHEEL" ]; then
+              echo "Renaming wheel to preserve Python version:"
+              echo "  From: $(basename "$WHEEL")"
+              echo "  To:   $(basename "$NEW_WHEEL")"
+              mv "$WHEEL" "$NEW_WHEEL"
+              WHEEL="$NEW_WHEEL"
+            fi
+            echo "Final wheel: $WHEEL"
+          else
+            echo "Error: No wheel found to rename"
+            exit 1
+          fi
+
       - name: Bundle dependencies into wheel
         if: success()
         env:
           VCPKG_ROOT: ${{ github.workspace }}/vcpkg
           VCPKG_TRIPLET: x64-osx
         run: |
-          # Find the wheel that was just built - it should be the newest one in dist/
-          # Match any cpXX-abi3 pattern (cp38, cp39, cp310, etc.) for x86_64
-          WHEEL=$(ls -t dist/pc_ble_driver_py-*-cp*-abi3-*x86_64*.whl 2>/dev/null | head -1)
+          # Find the renamed wheel
+          PYTHON_TAG="cp${{ matrix.python-version }}"
+          PYTHON_TAG=$(echo "$PYTHON_TAG" | sed 's/\.//g')
+          WHEEL=$(ls -t dist/pc_ble_driver_py-*-${PYTHON_TAG}-abi3-*x86_64*.whl 2>/dev/null | head -1)
           if [ -z "$WHEEL" ]; then
-            # Fallback: try without abi3 tag
+            # Fallback: try any x86_64 wheel
             WHEEL=$(ls -t dist/pc_ble_driver_py-*-*x86_64*.whl 2>/dev/null | head -1)
           fi
           if [ -n "$WHEEL" ] && [ -f "$WHEEL" ]; then
@@ -99,7 +144,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: wheel-x86_64-py${{ matrix.python-version }}
-          path: dist/*x86_64*.whl
+          path: dist/*.whl
           if-no-files-found: error
           retention-days: 1
 
@@ -131,6 +176,24 @@ jobs:
           path: wheels/arm64
           pattern: wheel-arm64-*
           merge-multiple: true
+
+      - name: List downloaded wheels
+        run: |
+          echo "=== x86_64 wheels ==="
+          ls -lh wheels/x86_64/*.whl 2>/dev/null | awk '{print $9, "(" $5 ")"}' || echo "No x86_64 wheels found"
+          echo ""
+          echo "=== ARM64 wheels ==="
+          ls -lh wheels/arm64/*.whl 2>/dev/null | awk '{print $9, "(" $5 ")"}' || echo "No ARM64 wheels found"
+          echo ""
+          echo "=== Expected: 6 x86_64 wheels (cp38, cp39, cp310, cp311, cp312, cp313) ==="
+          echo "=== Expected: 6 ARM64 wheels (cp38, cp39, cp310, cp311, cp312, cp313) ==="
+          X86_COUNT=$(ls -1 wheels/x86_64/*.whl 2>/dev/null | wc -l | tr -d ' ')
+          ARM64_COUNT=$(ls -1 wheels/arm64/*.whl 2>/dev/null | wc -l | tr -d ' ')
+          echo "Found: $X86_COUNT x86_64 wheels, $ARM64_COUNT ARM64 wheels"
+          if [ "$X86_COUNT" -lt 6 ] || [ "$ARM64_COUNT" -lt 6 ]; then
+            echo "WARNING: Expected 12 wheels total, but found $((X86_COUNT + ARM64_COUNT))"
+            echo "This may indicate that some builds failed or wheels were not renamed correctly"
+          fi
 
       - name: Delete existing release (if any)
         # Delete existing release to allow overwriting with same tag
@@ -239,17 +302,62 @@ jobs:
             -DPython3_FIND_VIRTUALENV=ONLY \
             -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON
 
+      - name: Rename wheel to preserve Python version
+        if: success()
+        run: |
+          # Find the wheel that was just built (it will have cp38-abi3 tag internally)
+          WHEEL=$(ls -t dist/pc_ble_driver_py-*-cp38-abi3-*arm64*.whl 2>/dev/null | head -1)
+          if [ -z "$WHEEL" ]; then
+            # Fallback: try any cp*-abi3 pattern
+            WHEEL=$(ls -t dist/pc_ble_driver_py-*-cp*-abi3-*arm64*.whl 2>/dev/null | head -1)
+          fi
+          if [ -z "$WHEEL" ]; then
+            # Fallback: try without abi3 tag
+            WHEEL=$(ls -t dist/pc_ble_driver_py-*-*arm64*.whl 2>/dev/null | head -1)
+          fi
+          if [ -n "$WHEEL" ] && [ -f "$WHEEL" ]; then
+            # Extract Python version tag (e.g., "3.8" -> "cp38", "3.12" -> "cp312")
+            PYTHON_TAG="cp${{ matrix.python-version }}"
+            # Remove dots from version for tag (3.10 -> cp310)
+            PYTHON_TAG=$(echo "$PYTHON_TAG" | sed 's/\.//g')
+            # Get version from package __init__.py (most reliable)
+            VERSION=$(python -c "import sys; sys.path.insert(0, '.'); from pc_ble_driver_py import __version__; print(__version__)" 2>/dev/null)
+            if [ -z "$VERSION" ]; then
+              # Fallback: extract from wheel filename
+              BASE_NAME=$(basename "$WHEEL" .whl)
+              VERSION=$(echo "$BASE_NAME" | sed -n 's/.*pc_ble_driver_py-\([0-9.]*\)-.*/\1/p')
+            fi
+            if [ -z "$VERSION" ]; then
+              echo "Error: Could not determine package version"
+              exit 1
+            fi
+            # Create new name with correct Python tag
+            NEW_WHEEL="dist/pc_ble_driver_py-${VERSION}-${PYTHON_TAG}-abi3-macosx_26_0_arm64.whl"
+            if [ "$WHEEL" != "$NEW_WHEEL" ]; then
+              echo "Renaming wheel to preserve Python version:"
+              echo "  From: $(basename "$WHEEL")"
+              echo "  To:   $(basename "$NEW_WHEEL")"
+              mv "$WHEEL" "$NEW_WHEEL"
+              WHEEL="$NEW_WHEEL"
+            fi
+            echo "Final wheel: $WHEEL"
+          else
+            echo "Error: No wheel found to rename"
+            exit 1
+          fi
+
       - name: Bundle dependencies into wheel
         if: success()
         env:
           VCPKG_ROOT: ${{ github.workspace }}/vcpkg
           VCPKG_TRIPLET: arm64-osx
         run: |
-          # Find the wheel that was just built - it should be the newest one in dist/
-          # Match any cpXX-abi3 pattern (cp38, cp39, cp310, etc.) for arm64
-          WHEEL=$(ls -t dist/pc_ble_driver_py-*-cp*-abi3-*arm64*.whl 2>/dev/null | head -1)
+          # Find the renamed wheel
+          PYTHON_TAG="cp${{ matrix.python-version }}"
+          PYTHON_TAG=$(echo "$PYTHON_TAG" | sed 's/\.//g')
+          WHEEL=$(ls -t dist/pc_ble_driver_py-*-${PYTHON_TAG}-abi3-*arm64*.whl 2>/dev/null | head -1)
           if [ -z "$WHEEL" ]; then
-            # Fallback: try without abi3 tag
+            # Fallback: try any arm64 wheel
             WHEEL=$(ls -t dist/pc_ble_driver_py-*-*arm64*.whl 2>/dev/null | head -1)
           fi
           if [ -n "$WHEEL" ] && [ -f "$WHEEL" ]; then
@@ -263,7 +371,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: wheel-arm64-py${{ matrix.python-version }}
-          path: dist/*arm64*.whl
+          path: dist/*.whl
           if-no-files-found: error
           retention-days: 1
 
