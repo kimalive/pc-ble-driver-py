@@ -41,9 +41,9 @@
 #define Py_LIMITED_API 0x03040000
 // Compatibility for SWIG 4.4.0: It generates code using Py_mod_exec, PyModuleDef_Slot, PyModuleDef_Init
 // These require proper header includes. SWIG 4.4.0's generated code needs moduleobject.h for full definitions.
-// Always include moduleobject.h to ensure PyModuleDef_Slot and PyModuleDef_Init are fully defined
-// This is needed for all Python versions when using SWIG 4.4.0
-#include <moduleobject.h>
+// However, moduleobject.h requires Python.h to be included first, which SWIG does automatically.
+// So we can't include moduleobject.h here directly. Instead, we'll rely on SWIG's generated code
+// to include it, or we ensure the definitions are available when needed.
 // For Python < 3.5, Py_mod_exec doesn't exist, so define it
 #if PY_VERSION_HEX < 0x03050000
   #ifndef Py_mod_exec
