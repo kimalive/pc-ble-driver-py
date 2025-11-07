@@ -106,10 +106,9 @@ build_arm64_wheel() {
     fi
     
     # CRITICAL: Immediately rename to a unique temporary name to prevent overwriting
+    # Keep it as a temp name until ALL builds are done, then rename at the end
+    # This prevents any Python version from overwriting another's wheel
     if [ -n "$wheel" ] && [ -f "$wheel" ]; then
-                # CRITICAL: Immediately rename to a unique temporary name to prevent overwriting
-                # Keep it as a temp name until ALL builds are done, then rename at the end
-                # This prevents any Python version from overwriting another's wheel
                 local python_tag="cp${python_version//./}"
                 local base_name=$(basename "$wheel" .whl)
                 local final_name="dist/${base_name%-cp38-abi3*}-${python_tag}-abi3-macosx_26_0_arm64.whl"
