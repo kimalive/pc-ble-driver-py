@@ -81,9 +81,18 @@ jobs:
           VCPKG_ROOT: ${{ github.workspace }}/vcpkg
           VCPKG_TRIPLET: x64-osx
         run: |
-          WHEEL=$(ls -t dist/pc_ble_driver_py-*-cp38-abi3-*x86_64*.whl 2>/dev/null | head -1)
+          # Find the wheel that was just built - it should be the newest one in dist/
+          # Match any cpXX-abi3 pattern (cp38, cp39, cp310, etc.) for x86_64
+          WHEEL=$(ls -t dist/pc_ble_driver_py-*-cp*-abi3-*x86_64*.whl 2>/dev/null | head -1)
+          if [ -z "$WHEEL" ]; then
+            # Fallback: try without abi3 tag
+            WHEEL=$(ls -t dist/pc_ble_driver_py-*-*x86_64*.whl 2>/dev/null | head -1)
+          fi
           if [ -n "$WHEEL" ] && [ -f "$WHEEL" ]; then
+            echo "Bundling dependencies into: $WHEEL"
             python ${{ github.workspace }}/bundle_into_wheel.py "$WHEEL" || echo "Bundling skipped (optional)"
+          else
+            echo "Warning: No wheel found to bundle"
           fi
 
       - name: Upload x86_64 wheel
@@ -91,7 +100,8 @@ jobs:
         with:
           name: wheel-x86_64-py${{ matrix.python-version }}
           path: dist/*x86_64*.whl
-          if-no-files-found: warn
+          if-no-files-found: error
+          retention-days: 1
 
   create-release:
     name: Create Release
@@ -160,6 +170,7 @@ jobs:
           files: |
             wheels/x86_64/*.whl
             wheels/arm64/*.whl
+          fail_on_unmatched_files: true
           draft: false
           prerelease: false
           make_latest: true
@@ -234,9 +245,18 @@ jobs:
           VCPKG_ROOT: ${{ github.workspace }}/vcpkg
           VCPKG_TRIPLET: arm64-osx
         run: |
-          WHEEL=$(ls -t dist/pc_ble_driver_py-*-cp38-abi3-*arm64*.whl 2>/dev/null | head -1)
+          # Find the wheel that was just built - it should be the newest one in dist/
+          # Match any cpXX-abi3 pattern (cp38, cp39, cp310, etc.) for arm64
+          WHEEL=$(ls -t dist/pc_ble_driver_py-*-cp*-abi3-*arm64*.whl 2>/dev/null | head -1)
+          if [ -z "$WHEEL" ]; then
+            # Fallback: try without abi3 tag
+            WHEEL=$(ls -t dist/pc_ble_driver_py-*-*arm64*.whl 2>/dev/null | head -1)
+          fi
           if [ -n "$WHEEL" ] && [ -f "$WHEEL" ]; then
+            echo "Bundling dependencies into: $WHEEL"
             python ${{ github.workspace }}/bundle_into_wheel.py "$WHEEL" || echo "Bundling skipped (optional)"
+          else
+            echo "Warning: No wheel found to bundle"
           fi
 
       - name: Upload ARM64 wheel artifact
@@ -244,5 +264,6 @@ jobs:
         with:
           name: wheel-arm64-py${{ matrix.python-version }}
           path: dist/*arm64*.whl
-          if-no-files-found: warn
+          if-no-files-found: error
+          retention-days: 1
 
