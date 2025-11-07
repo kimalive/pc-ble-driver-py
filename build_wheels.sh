@@ -21,6 +21,16 @@ find dist -maxdepth 1 -name "*.backup" -delete 2>/dev/null || true
 find dist -maxdepth 1 -name "*.tmp.*" -delete 2>/dev/null || true
 rm -f /tmp/wheel_rename_map.txt 2>/dev/null || true
 echo "✓ Cleaned dist/ directory"
+
+# CRITICAL: Clean _skbuild directory to prevent cross-version contamination
+# Old build artifacts from Python 3.13 might be reused if we don't clean
+echo "Cleaning _skbuild directory..."
+if [ -d "_skbuild" ]; then
+    rm -rf _skbuild 2>/dev/null || true
+    echo "✓ Cleaned _skbuild/ directory"
+else
+    echo "✓ No _skbuild/ directory to clean"
+fi
 echo ""
 
 # Function to find Python executable
