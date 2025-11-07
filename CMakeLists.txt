@@ -14,6 +14,24 @@ if(WIN32)
 endif()
 # PYTHON_LIBRARY is changed by the PythonExtensions package, so a different variable is required to keep the original user flag
 set(PYTHON_LIBRARY_FROM_USER_FLAGS "${PYTHON_LIBRARY}")
+
+# CRITICAL: If PYTHON_EXECUTABLE is provided, determine the correct Python library from it
+# This overrides PYTHON_LIBRARY_FROM_USER_FLAGS which might point to the wrong Python version
+# (e.g., Python 3.13 when building for Python 3.8)
+if(PYTHON_EXECUTABLE AND APPLE)
+    execute_process(
+        COMMAND ${PYTHON_EXECUTABLE} -c "import sysconfig; libdir = sysconfig.get_config_var('LIBDIR'); libfile = sysconfig.get_config_var('LIBRARY'); libpath = f'{libdir}/{libfile}' if libfile else libdir; print(libpath)"
+        OUTPUT_VARIABLE PYTHON_LIB_FROM_EXE
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+    if(PYTHON_LIB_FROM_EXE AND EXISTS "${PYTHON_LIB_FROM_EXE}")
+        # Override PYTHON_LIBRARY_FROM_USER_FLAGS with the correct library from PYTHON_EXECUTABLE
+        set(PYTHON_LIBRARY_FROM_USER_FLAGS "${PYTHON_LIB_FROM_EXE}")
+        message(STATUS "Overriding PYTHON_LIBRARY_FROM_USER_FLAGS with library from PYTHON_EXECUTABLE: ${PYTHON_LIBRARY_FROM_USER_FLAGS}")
+    endif()
+endif()
+
 # Use non-debug version of python, even when building a debug version 
 add_definitions(-DSWIG_PYTHON_INTERPRETER_NO_DEBUG)
 message(VERBOSE "CMAKE executable path ${CMAKE_COMMAND}")
