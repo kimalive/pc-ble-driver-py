@@ -51,6 +51,16 @@ build_arm64_wheel() {
     echo "Building ARM64 wheel for Python ${python_version}..."
     export CMAKE_PREFIX_PATH=$VCPKG_ROOT/installed/arm64-osx
     
+    # CRITICAL: Clean _skbuild directory for this Python version to prevent cross-contamination
+    # Old build artifacts from Python 3.13 might be reused if we don't clean
+    local skbuild_pattern="_skbuild/macosx-*-arm64-${python_version}"
+    if [ -d "_skbuild" ]; then
+        echo "  Cleaning old build artifacts for Python ${python_version}..."
+        find _skbuild -maxdepth 1 -type d -name "macosx-*-arm64-${python_version}" -exec rm -rf {} + 2>/dev/null || true
+        # Also clean any build directories that don't match current Python version
+        find _skbuild -maxdepth 1 -type d -name "macosx-*-arm64-*" ! -name "macosx-*-arm64-${python_version}" -exec rm -rf {} + 2>/dev/null || true
+    fi
+    
     # CRITICAL: Convert python_exe to absolute path for CMake
     # CMake requires absolute paths for PYTHON_EXECUTABLE
     local python_exe_abs
@@ -60,6 +70,16 @@ build_arm64_wheel() {
         python_exe_abs="$(cd "$(dirname "$python_exe")" && pwd)/$(basename "$python_exe")"
     fi
     
+    # CRITICAL: Verify we're using the correct Python version
+    local actual_version=$($python_exe -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null)
+    if [ "$actual_version" != "$python_version" ]; then
+        echo "  ✗ ERROR: Python executable version mismatch!"
+        echo "     Expected: ${python_version}, Got: ${actual_version}"
+        echo "     Executable: ${python_exe}"
+        return 1
+    fi
+    echo "  ✓ Verified Python version: ${actual_version}"
+    
     # CRITICAL: Pass PYTHON_EXECUTABLE to CMake to ensure it uses the correct Python version
     # Without this, CMake might find a different Python (e.g., Python 3.13 when building for 3.12)
     # Also tell CMake to prefer our explicitly provided Python over vcpkg's finder
@@ -68,11 +88,17 @@ build_arm64_wheel() {
     
     # CRITICAL: Check if build actually succeeded - if it fails, don't try to find/rename wheels
     build_log="/tmp/build_py${python_version//./}.log"
-    if ! $python_exe setup.py bdist_wheel --build-type Release -- \
+    # CRITICAL: Unset PYTHONPATH and ensure PATH doesn't interfere with Python detection
+    # Also explicitly set Python3_ROOT_DIR to the Python executable's directory
+    local python_root_dir=$(dirname "$(dirname "$python_exe_abs")")
+    if ! env -u PYTHONPATH PATH="$(dirname "$python_exe_abs"):$PATH" $python_exe setup.py bdist_wheel --build-type Release -- \
         -DCMAKE_OSX_ARCHITECTURES=arm64 \
         -DPYTHON_EXECUTABLE="$python_exe_abs" \
+        -DPython3_EXECUTABLE="$python_exe_abs" \
+        -DPython3_ROOT_DIR="$python_root_dir" \
         -DPython3_FIND_STRATEGY=LOCATION \
         -DPython3_FIND_REGISTRY=NEVER \
+        -DPython3_FIND_VIRTUALENV=ONLY \
         -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
         2>&1 | tee "$build_log"; then
         echo "  ✗ Build failed for Python ${python_version}"
@@ -109,31 +135,31 @@ build_arm64_wheel() {
     # Keep it as a temp name until ALL builds are done, then rename at the end
     # This prevents any Python version from overwriting another's wheel
     if [ -n "$wheel" ] && [ -f "$wheel" ]; then
-                local python_tag="cp${python_version//./}"
-                local base_name=$(basename "$wheel" .whl)
-                local final_name="dist/${base_name%-cp38-abi3*}-${python_tag}-abi3-macosx_26_0_arm64.whl"
-                
-                # Create unique temp name that includes Python version to prevent overwriting
-                local unique_temp_name="dist/pc_ble_driver_py-0.17.10-${python_tag}-abi3-macosx_26_0_arm64.tmp.$(date +%s).$$.whl"
-                mv "$wheel" "$unique_temp_name" 2>/dev/null || true
-                wheel="$unique_temp_name"
-                
-                echo "✓ Built: $(basename "$wheel") (built with Python ${python_version}, will rename to $(basename "$final_name") at end)"
-                
-                # Bundle dependencies (using temp name)
-                if [ -f "$(dirname "$0")/bundle_into_wheel.py" ]; then
-                    echo "  Bundling dependencies..."
-                    python3 "$(dirname "$0")/bundle_into_wheel.py" "$wheel" 2>&1 | grep -E "(Bundled|Updated|wheel:)" || true
-                fi
-                
-                # Store mapping for final rename (using a simple approach: rename temp to final)
-                # We'll do the final rename after all builds are complete
-                if [ "$wheel" != "$final_name" ]; then
-                    # Store the final name by creating a symlink or just remember to rename at end
-                    # For now, we'll rename at the end of the script
-                    echo "$wheel|$final_name" >> /tmp/wheel_rename_map.txt 2>/dev/null || true
-                fi
-            fi
+        local python_tag="cp${python_version//./}"
+        local base_name=$(basename "$wheel" .whl)
+        local final_name="dist/${base_name%-cp38-abi3*}-${python_tag}-abi3-macosx_26_0_arm64.whl"
+        
+        # Create unique temp name that includes Python version to prevent overwriting
+        local unique_temp_name="dist/pc_ble_driver_py-0.17.10-${python_tag}-abi3-macosx_26_0_arm64.tmp.$(date +%s).$$.whl"
+        mv "$wheel" "$unique_temp_name" 2>/dev/null || true
+        wheel="$unique_temp_name"
+        
+        echo "✓ Built: $(basename "$wheel") (built with Python ${python_version}, will rename to $(basename "$final_name") at end)"
+        
+        # Bundle dependencies (using temp name)
+        if [ -f "$(dirname "$0")/bundle_into_wheel.py" ]; then
+            echo "  Bundling dependencies..."
+            python3 "$(dirname "$0")/bundle_into_wheel.py" "$wheel" 2>&1 | grep -E "(Bundled|Updated|wheel:)" || true
+        fi
+        
+        # Store mapping for final rename (using a simple approach: rename temp to final)
+        # We'll do the final rename after all builds are complete
+        if [ "$wheel" != "$final_name" ]; then
+            # Store the final name by creating a symlink or just remember to rename at end
+            # For now, we'll rename at the end of the script
+            echo "$wheel|$final_name" >> /tmp/wheel_rename_map.txt 2>/dev/null || true
+        fi
+    fi
 }
 
 # Function to build x86_64 wheel (if possible)
