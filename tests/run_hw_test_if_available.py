@@ -180,7 +180,14 @@ def main():
     print()
     
     # Run test
-    result = subprocess.run(cmd, cwd=Path(__file__).parent)
+    # Merge stderr into stdout so output appears in normal color (not red)
+    # This prevents test output from looking like errors
+    result = subprocess.run(
+        cmd,
+        cwd=Path(__file__).parent,
+        stderr=subprocess.STDOUT,  # Merge stderr into stdout for normal color
+        text=True,  # Ensure text mode for proper output handling
+    )
     
     if result.returncode == 0:
         print("\n✅ Hardware test passed!")
