@@ -104,8 +104,9 @@ build_arm64_wheel() {
         echo "  Check $build_log for details"
         return 1
     fi
-            
-            if [ -n "$wheel" ] && [ -f "$wheel" ]; then
+    
+    # CRITICAL: Immediately rename to a unique temporary name to prevent overwriting
+    if [ -n "$wheel" ] && [ -f "$wheel" ]; then
                 # CRITICAL: Immediately rename to a unique temporary name to prevent overwriting
                 # Keep it as a temp name until ALL builds are done, then rename at the end
                 # This prevents any Python version from overwriting another's wheel
