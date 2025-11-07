@@ -16,6 +16,8 @@ pc_ble_driver_py @ https://github.com/kimalive/pc-ble-driver-py/releases/downloa
 # pc_ble_driver_py @ https://github.com/kimalive/pc-ble-driver-py/releases/download/v0.17.10/pc_ble_driver_py-0.17.10-cp312-abi3-macosx_26_0_x86_64.whl; platform_machine == "x86_64"
 # pc_ble_driver_py @ https://github.com/kimalive/pc-ble-driver-py/releases/download/v0.17.10/pc_ble_driver_py-0.17.10-cp312-abi3-macosx_26_0_arm64.whl; platform_machine == "arm64"
 
-# Dependencies
-wrapt>=1.0.0
-cryptography>=3.0.0
+# Note: Dependencies (wrapt, cryptography) are automatically installed by pip
+# because they're specified in the wheel's metadata (setup.py install_requires).
+# You don't need to list them separately, but you can if you want to pin versions:
+# wrapt>=1.0.0
+# cryptography>=3.0.0
