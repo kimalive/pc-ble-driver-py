@@ -140,6 +140,54 @@ jobs:
             echo "Warning: No wheel found to bundle"
           fi
 
+      - name: Test wheel after build
+        if: success()
+        env:
+          DYLD_LIBRARY_PATH: ${{ github.workspace }}/vcpkg/installed/x64-osx/lib:${DYLD_LIBRARY_PATH}
+        run: |
+          # Find the wheel
+          PYTHON_TAG="cp${{ matrix.python-version }}"
+          PYTHON_TAG=$(echo "$PYTHON_TAG" | sed 's/\.//g')
+          WHEEL=$(ls -t dist/pc_ble_driver_py-*-${PYTHON_TAG}-abi3-*x86_64*.whl 2>/dev/null | head -1)
+          if [ -z "$WHEEL" ]; then
+            WHEEL=$(ls -t dist/pc_ble_driver_py-*-*x86_64*.whl 2>/dev/null | head -1)
+          fi
+          if [ -n "$WHEEL" ] && [ -f "$WHEEL" ]; then
+            echo "Testing wheel: $(basename "$WHEEL")"
+            # Create a temporary venv to test the wheel
+            TEST_VENV=$(mktemp -d)
+            python -m venv "$TEST_VENV"
+            "$TEST_VENV/bin/pip" install --upgrade pip --quiet
+            "$TEST_VENV/bin/pip" install "$WHEEL" --quiet
+            # Test basic imports (this will catch segfaults)
+            if ! "$TEST_VENV/bin/python" -c "
+import sys
+import os
+# Change to temp dir to avoid importing from source
+os.chdir('$(mktemp -d)')
+try:
+    import pc_ble_driver_py
+    print(f'✓ Imported pc_ble_driver_py (version: {pc_ble_driver_py.__version__})')
+    import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5
+    print('✓ Imported nrf_ble_driver_sd_api_v5')
+    import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v2
+    print('✓ Imported nrf_ble_driver_sd_api_v2')
+    print('✓ All imports successful')
+except RuntimeError as e:
+    if '__conn_ic_id__' in str(e):
+        print('✓ Imports work (hardware not available, expected)')
+    else:
+        raise
+"; then
+              echo "✗ Wheel test failed - wheel may segfault or have import errors"
+              exit 1
+            fi
+            rm -rf "$TEST_VENV"
+            echo "✓ Wheel test passed"
+          else
+            echo "Warning: No wheel found to test"
+          fi
+
       - name: Upload x86_64 wheel
         uses: actions/upload-artifact@v4
         with:
@@ -365,6 +413,54 @@ jobs:
             python ${{ github.workspace }}/bundle_into_wheel.py "$WHEEL" || echo "Bundling skipped (optional)"
           else
             echo "Warning: No wheel found to bundle"
+          fi
+
+      - name: Test wheel after build
+        if: success()
+        env:
+          DYLD_LIBRARY_PATH: ${{ github.workspace }}/vcpkg/installed/arm64-osx/lib:${DYLD_LIBRARY_PATH}
+        run: |
+          # Find the wheel
+          PYTHON_TAG="cp${{ matrix.python-version }}"
+          PYTHON_TAG=$(echo "$PYTHON_TAG" | sed 's/\.//g')
+          WHEEL=$(ls -t dist/pc_ble_driver_py-*-${PYTHON_TAG}-abi3-*arm64*.whl 2>/dev/null | head -1)
+          if [ -z "$WHEEL" ]; then
+            WHEEL=$(ls -t dist/pc_ble_driver_py-*-*arm64*.whl 2>/dev/null | head -1)
+          fi
+          if [ -n "$WHEEL" ] && [ -f "$WHEEL" ]; then
+            echo "Testing wheel: $(basename "$WHEEL")"
+            # Create a temporary venv to test the wheel
+            TEST_VENV=$(mktemp -d)
+            python -m venv "$TEST_VENV"
+            "$TEST_VENV/bin/pip" install --upgrade pip --quiet
+            "$TEST_VENV/bin/pip" install "$WHEEL" --quiet
+            # Test basic imports (this will catch segfaults)
+            if ! "$TEST_VENV/bin/python" -c "
+import sys
+import os
+# Change to temp dir to avoid importing from source
+os.chdir('$(mktemp -d)')
+try:
+    import pc_ble_driver_py
+    print(f'✓ Imported pc_ble_driver_py (version: {pc_ble_driver_py.__version__})')
+    import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5
+    print('✓ Imported nrf_ble_driver_sd_api_v5')
+    import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v2
+    print('✓ Imported nrf_ble_driver_sd_api_v2')
+    print('✓ All imports successful')
+except RuntimeError as e:
+    if '__conn_ic_id__' in str(e):
+        print('✓ Imports work (hardware not available, expected)')
+    else:
+        raise
+"; then
+              echo "✗ Wheel test failed - wheel may segfault or have import errors"
+              exit 1
+            fi
+            rm -rf "$TEST_VENV"
+            echo "✓ Wheel test passed"
+          else
+            echo "Warning: No wheel found to test"
           fi
 
       - name: Upload ARM64 wheel artifact

@@ -57,28 +57,83 @@ def bundle_dependencies(wheel_path):
         deps_dir = os.path.join(temp_dir, 'pc_ble_driver_py', 'lib', 'deps')
         os.makedirs(deps_dir, exist_ok=True)
         
-        # Copy libraries
+        # Copy libraries and fix their install_name
         bundled = False
+        import subprocess
         for lib_name, lib_path in existing_libs:
             dest = os.path.join(deps_dir, lib_name)
             shutil.copy2(lib_path, dest)
-            print(f"  ✓ Bundled: {lib_name}")
+            
+            # CRITICAL: Fix install_name to use @loader_path instead of @rpath
+            # This ensures the library can be found when loaded from deps/
+            # Note: @loader_path refers to the .so file that loads it, which is in lib/
+            # So @loader_path/deps/ will resolve to lib/deps/ where the library is
+            result = subprocess.run(
+                ['install_name_tool', '-id', f'@loader_path/deps/{lib_name}', dest],
+                capture_output=True,
+                text=True
+            )
+            if result.returncode != 0:
+                print(f"  ⚠️  Warning: Could not fix install_name for {lib_name}: {result.stderr}")
+                # Try alternative: use @rpath but ensure rpath is set correctly
+                result2 = subprocess.run(
+                    ['install_name_tool', '-id', f'@rpath/{lib_name}', dest],
+                    capture_output=True,
+                    text=True
+                )
+                if result2.returncode == 0:
+                    print(f"  ✓ Bundled with @rpath install_name: {lib_name}")
+                else:
+                    print(f"  ⚠️  Failed to set install_name for {lib_name}")
+            else:
+                print(f"  ✓ Bundled and fixed install_name to @loader_path/deps/: {lib_name}")
+            
+            # Also fix any dependencies in the bundled library that reference vcpkg paths
+            # Check for dependencies that might need fixing
+            deps_result = subprocess.run(
+                ['otool', '-L', dest],
+                capture_output=True,
+                text=True
+            )
+            if deps_result.returncode == 0:
+                # Fix any dependencies that reference the original vcpkg path
+                for line in deps_result.stdout.split('\n')[1:]:  # Skip first line (the library itself)
+                    if VCPKG_LIB_DIR in line:
+                        dep_path = line.split()[0] if line.strip() else None
+                        if dep_path and os.path.basename(dep_path) in [l[0] for l in existing_libs]:
+                            dep_name = os.path.basename(dep_path)
+                            subprocess.run(
+                                ['install_name_tool', '-change', dep_path, f'@loader_path/{dep_name}', dest],
+                                capture_output=True
+                            )
+            
             bundled = True
         
         if not bundled:
             return False
         
         # Update .so files to use bundled libraries
-        import subprocess
         lib_dir = os.path.join(temp_dir, 'pc_ble_driver_py', 'lib')
         for so_file in Path(lib_dir).glob('*.so'):
             if 'deps' not in str(so_file):
-                # Add @loader_path/deps to rpath
-                subprocess.run(
-                    ['install_name_tool', '-add_rpath', '@loader_path/deps', str(so_file)],
-                    capture_output=True
+                # Add @loader_path/deps to rpath (if not already present)
+                rpath_result = subprocess.run(
+                    ['otool', '-l', str(so_file)],
+                    capture_output=True,
+                    text=True
                 )
-                print(f"  ✓ Updated rpath in {so_file.name}")
+                if '@loader_path/deps' not in rpath_result.stdout:
+                    result = subprocess.run(
+                        ['install_name_tool', '-add_rpath', '@loader_path/deps', str(so_file)],
+                        capture_output=True,
+                        text=True
+                    )
+                    if result.returncode == 0:
+                        print(f"  ✓ Updated rpath in {so_file.name}")
+                    else:
+                        print(f"  ⚠️  Warning: Could not add rpath to {so_file.name}: {result.stderr}")
+                else:
+                    print(f"  ✓ rpath already set in {so_file.name}")
         
         # Recreate wheel
         # Note: Backup is created temporarily during bundling, but will be cleaned up by build script
