@@ -112,6 +112,7 @@ def verify_so_python_version(so_file, expected_version):
 def clean_lib_directory():
     """Comprehensively clean the lib directory to prevent cross-version contamination."""
     lib_dir = 'pc_ble_driver_py/lib'
+    # Get current Python version for verification
     python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
     
     if not os.path.exists(lib_dir):
@@ -157,6 +158,9 @@ def clean_lib_directory():
         return True
 
 def main():
+    # Get current Python version (used throughout this function)
+    python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
+    
     # CRITICAL: Clean old .so files first to prevent cross-version contamination
     # This MUST happen before any build or wheel installation
     # Fail if cleaning doesn't work
