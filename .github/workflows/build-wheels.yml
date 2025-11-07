@@ -1,4 +1,4 @@
-name: Build Wheels (x86_64 and ARM64)
+name: Build Wheels (x86_64)
 on:
   workflow_dispatch:  # Manual trigger
   push:
@@ -16,22 +16,14 @@ jobs:
     strategy:
       matrix:
         python-version: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13']
-        include:
-          - python-version: '3.8'
-            macos-python-version: '3.8.18'
-          - python-version: '3.9'
-            macos-python-version: '3.9.18'
-          - python-version: '3.10'
-            macos-python-version: '3.10.13'
-          - python-version: '3.11'
-            macos-python-version: '3.11.7'
-          - python-version: '3.12'
-            macos-python-version: '3.12.1'
-          - python-version: '3.13'
-            macos-python-version: '3.13.0'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Setup Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
 
       - name: Install vcpkg
         run: |
@@ -43,20 +35,10 @@ jobs:
         run: |
           ./vcpkg/vcpkg install nrf-ble-driver --triplet x64-osx
 
-      - name: Setup Python ${{ matrix.python-version }}
-        run: |
-          curl -s https://www.python.org/ftp/python/${{ matrix.macos-python-version }}/python-${{ matrix.macos-python-version }}-macos11.pkg --output python.pkg
-          sudo installer -pkg python.pkg -target /
-          PYTHON_PATH=$(ls /Library/Frameworks/Python.framework/Versions/${{ matrix.python-version }}/bin/python3)
-          sudo ln -sf $PYTHON_PATH /usr/local/bin/python${{ matrix.python-version }}
-          sudo ln -sf $PYTHON_PATH /usr/local/bin/python3
-          echo "PATH=/usr/local/bin:$PATH" >> $GITHUB_ENV
-          python3 --version
-
       - name: Install Python dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          pip3 install scikit-build ninja cmake wrapt cryptography
+          python -m pip install --upgrade pip
+          pip install scikit-build ninja cmake wrapt cryptography
 
       - name: Build x86_64 wheel
         env:
@@ -64,9 +46,9 @@ jobs:
           CMAKE_TOOLCHAIN_FILE: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
           CMAKE_PREFIX_PATH: ${{ github.workspace }}/vcpkg/installed/x64-osx
         run: |
-          python${{ matrix.python-version }} setup.py bdist_wheel --build-type Release -- \
+          python setup.py bdist_wheel --build-type Release -- \
             -DCMAKE_OSX_ARCHITECTURES=x86_64 \
-            -DPYTHON_EXECUTABLE="$(which python${{ matrix.python-version }})" \
+            -DPYTHON_EXECUTABLE="$(which python)" \
             -DPython3_FIND_STRATEGY=LOCATION \
             -DPython3_FIND_REGISTRY=NEVER \
             -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON
@@ -76,7 +58,7 @@ jobs:
         run: |
           WHEEL=$(ls -t dist/pc_ble_driver_py-*-cp38-abi3-*x86_64*.whl 2>/dev/null | head -1)
           if [ -n "$WHEEL" ] && [ -f "$WHEEL" ]; then
-            python3 bundle_into_wheel.py "$WHEEL" || true
+            python ${{ github.workspace }}/bundle_into_wheel.py "$WHEEL" || true
           fi
 
       - name: Upload x86_64 wheel
@@ -85,80 +67,3 @@ jobs:
           name: wheel-x86_64-py${{ matrix.python-version }}
           path: dist/*x86_64*.whl
           if-no-files-found: warn
-
-  build-arm64:
-    name: Build ARM64 Wheels (Apple Silicon macOS)
-    runs-on: macos-13  # Use macos-13 (more available, can build ARM64)
-    strategy:
-      matrix:
-        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13']
-        include:
-          - python-version: '3.8'
-            macos-python-version: '3.8.18'
-          - python-version: '3.9'
-            macos-python-version: '3.9.18'
-          - python-version: '3.10'
-            macos-python-version: '3.10.13'
-          - python-version: '3.11'
-            macos-python-version: '3.11.7'
-          - python-version: '3.12'
-            macos-python-version: '3.12.1'
-          - python-version: '3.13'
-            macos-python-version: '3.13.0'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install vcpkg
-        run: |
-          git clone https://github.com/Microsoft/vcpkg.git
-          cd vcpkg
-          ./bootstrap-vcpkg.sh
-
-      - name: Install nrf-ble-driver (arm64-osx)
-        run: |
-          ./vcpkg/vcpkg install nrf-ble-driver --triplet arm64-osx
-
-      - name: Setup Python ${{ matrix.python-version }}
-        run: |
-          curl -s https://www.python.org/ftp/python/${{ matrix.macos-python-version }}/python-${{ matrix.macos-python-version }}-macos11.pkg --output python.pkg
-          sudo installer -pkg python.pkg -target /
-          PYTHON_PATH=$(ls /Library/Frameworks/Python.framework/Versions/${{ matrix.python-version }}/bin/python3)
-          sudo ln -sf $PYTHON_PATH /usr/local/bin/python${{ matrix.python-version }}
-          sudo ln -sf $PYTHON_PATH /usr/local/bin/python3
-          echo "PATH=/usr/local/bin:$PATH" >> $GITHUB_ENV
-          python3 --version
-
-      - name: Install Python dependencies
-        run: |
-          python3 -m pip install --upgrade pip
-          pip3 install scikit-build ninja cmake wrapt cryptography
-
-      - name: Build ARM64 wheel
-        env:
-          VCPKG_ROOT: ${{ github.workspace }}/vcpkg
-          CMAKE_TOOLCHAIN_FILE: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
-          CMAKE_PREFIX_PATH: ${{ github.workspace }}/vcpkg/installed/arm64-osx
-        run: |
-          python${{ matrix.python-version }} setup.py bdist_wheel --build-type Release -- \
-            -DCMAKE_OSX_ARCHITECTURES=arm64 \
-            -DPYTHON_EXECUTABLE="$(which python${{ matrix.python-version }})" \
-            -DPython3_FIND_STRATEGY=LOCATION \
-            -DPython3_FIND_REGISTRY=NEVER \
-            -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON
-
-      - name: Bundle dependencies into wheel
-        if: success()
-        run: |
-          WHEEL=$(ls -t dist/pc_ble_driver_py-*-cp38-abi3-*arm64*.whl 2>/dev/null | head -1)
-          if [ -n "$WHEEL" ] && [ -f "$WHEEL" ]; then
-            python3 bundle_into_wheel.py "$WHEEL" || true
-          fi
-
-      - name: Upload ARM64 wheel
-        uses: actions/upload-artifact@v4
-        with:
-          name: wheel-arm64-py${{ matrix.python-version }}
-          path: dist/*arm64*.whl
-          if-no-files-found: warn
-
