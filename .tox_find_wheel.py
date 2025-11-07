@@ -213,16 +213,36 @@ def main():
         print("Building from source (TOX_USE_WHEELS not set or false)")
         print("   Set TOX_USE_WHEELS=true to test wheels")
     
+    # CRITICAL: Clean _skbuild directory to ensure we get a fresh build for this Python version
+    # Old build artifacts from different Python versions can cause cross-version contamination
+    import shutil
+    import platform
+    
+    skbuild_dir = '_skbuild'
+    if os.path.exists(skbuild_dir):
+        # Find and remove build directories that don't match current Python version
+        # This prevents copying .so files from wrong Python version
+        build_dirs_to_check = glob.glob(os.path.join(skbuild_dir, '*'))
+        version_pattern = f"-{python_version}"
+        cleaned_any = False
+        for build_dir in build_dirs_to_check:
+            # If this build directory doesn't match current Python version, remove it
+            if version_pattern not in build_dir:
+                print(f"🧹 Removing old build directory: {os.path.basename(build_dir)}")
+                try:
+                    shutil.rmtree(build_dir)
+                    cleaned_any = True
+                except Exception as e:
+                    print(f"  ⚠️  Could not remove {os.path.basename(build_dir)}: {e}")
+        if cleaned_any:
+            print(f"  ✓ Cleaned old build directories")
+    
     # Build from source (default behavior)
     build_result = subprocess.run([
         sys.executable, 'setup.py', 'build', '--build-type', 'Release'
     ])
     if build_result.returncode != 0:
         return build_result.returncode
-    
-    # Copy libraries (prefer matching Python version)
-    import shutil
-    import platform
     
     # Find build directory for current Python version
     # Pattern: _skbuild/macosx-*-arm64-{version}/cmake-install/...
