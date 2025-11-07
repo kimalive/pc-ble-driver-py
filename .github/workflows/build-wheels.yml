@@ -54,11 +54,17 @@ jobs:
           CMAKE_TOOLCHAIN_FILE: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
           CMAKE_PREFIX_PATH: ${{ github.workspace }}/vcpkg/installed/x64-osx
         run: |
+          # Clean _skbuild to ensure fresh build (prevents cross-version contamination)
+          rm -rf _skbuild || true
+          # Build wheel with explicit Python detection flags
           python setup.py bdist_wheel --build-type Release -- \
             -DCMAKE_OSX_ARCHITECTURES=x86_64 \
             -DPYTHON_EXECUTABLE="$(which python)" \
+            -DPython3_EXECUTABLE="$(which python)" \
+            -DPython3_ROOT_DIR="$(dirname $(dirname $(which python)))" \
             -DPython3_FIND_STRATEGY=LOCATION \
             -DPython3_FIND_REGISTRY=NEVER \
+            -DPython3_FIND_VIRTUALENV=ONLY \
             -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON
 
       - name: Bundle dependencies into wheel
