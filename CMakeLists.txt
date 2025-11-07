@@ -98,9 +98,42 @@ include(${SWIG_USE_FILE})
 
 # nrf-ble-driver
 # Try to find with exact version first, fall back to any version if using vcpkg
-if(DEFINED ENV{VCPKG_ROOT})
+# Note: vcpkg may install a different version (e.g., 4.1.4 instead of 4.1.100)
+# So we accept any version when using vcpkg
+# Check multiple ways to detect vcpkg usage:
+# 1. VCPKG_ROOT environment variable
+# 2. CMAKE_TOOLCHAIN_FILE pointing to vcpkg
+# 3. CMAKE_PREFIX_PATH pointing to vcpkg installed directory
+set(USING_VCPKG FALSE)
+if(DEFINED ENV{VCPKG_ROOT} OR DEFINED VCPKG_ROOT)
+    set(USING_VCPKG TRUE)
+    message(STATUS "Detected vcpkg via VCPKG_ROOT")
+elseif(CMAKE_TOOLCHAIN_FILE AND "vcpkg" IN_LIST CMAKE_TOOLCHAIN_FILE)
+    set(USING_VCPKG TRUE)
+    message(STATUS "Detected vcpkg via CMAKE_TOOLCHAIN_FILE")
+elseif(CMAKE_PREFIX_PATH)
+    foreach(prefix_path ${CMAKE_PREFIX_PATH})
+        if("vcpkg" IN_LIST prefix_path OR "installed" IN_LIST prefix_path)
+            set(USING_VCPKG TRUE)
+            message(STATUS "Detected vcpkg via CMAKE_PREFIX_PATH: ${prefix_path}")
+            break()
+        endif()
+    endforeach()
+endif()
+
+if(USING_VCPKG)
+    # When using vcpkg, accept any version (vcpkg may have a different version)
+    # Don't specify version to allow any installed version
     find_package(nrf-ble-driver CONFIG REQUIRED)
+    # Log the version found for debugging
+    if(nrf-ble-driver_VERSION)
+        message(STATUS "Found nrf-ble-driver version: ${nrf-ble-driver_VERSION} (via vcpkg)")
+    else()
+        message(STATUS "Found nrf-ble-driver (version unknown, via vcpkg)")
+    endif()
 else()
+    # When not using vcpkg, require exact version
+    message(STATUS "Not using vcpkg, requiring exact nrf-ble-driver version: ${NRF_BLE_DRIVER_VERSION}")
     find_package(nrf-ble-driver ${NRF_BLE_DRIVER_VERSION} EXACT CONFIG REQUIRED)
 endif()
 
