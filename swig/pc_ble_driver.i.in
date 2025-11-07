@@ -43,25 +43,9 @@
 // These require proper header includes. We must include Python.h and moduleobject.h BEFORE SWIG generates code
 // CRITICAL: Include Python.h first, then moduleobject.h to get all necessary definitions
 // SWIG includes Python.h automatically, but we need to ensure moduleobject.h is also included
-// Note: We include these here in %begin block AND in the %{...%} block to ensure they're available everywhere
 #include <Python.h>
 // Include moduleobject.h to get PyModuleDef_Slot, PyModuleDef_Init, and Py_mod_exec definitions
 // This must be included for SWIG 4.4.0 compatibility with all Python versions (3.8-3.13)
-// Try both standard include and with Python prefix path
-#include <moduleobject.h>
-// For Python < 3.5, Py_mod_exec doesn't exist, so define it
-#if PY_VERSION_HEX < 0x03050000
-  #ifndef Py_mod_exec
-    #define Py_mod_exec 0
-  #endif
-#endif
-%}
-
-// Also include in the main code block to ensure definitions are available in generated code
-%{
-// CRITICAL: Include moduleobject.h here too for SWIG 4.4.0 compatibility
-// This ensures Py_mod_exec, PyModuleDef_Slot, and PyModuleDef_Init are available
-// in the generated wrapper code
 #include <moduleobject.h>
 // For Python < 3.5, Py_mod_exec doesn't exist, so define it
 #if PY_VERSION_HEX < 0x03050000
