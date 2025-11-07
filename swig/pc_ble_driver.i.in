@@ -38,13 +38,16 @@
 %module @SWIG_MODULE_NAME@
 
 %begin %{
-#define Py_LIMITED_API 0x03040000
-// CRITICAL: For SWIG 4.4.0 compatibility, include moduleobject.h
+// CRITICAL: For SWIG 4.4.0 compatibility, we need full Python API access
 // SWIG 4.4.0 generates code using Py_mod_exec, PyModuleDef_Slot, PyModuleDef_Init
-// These are defined in moduleobject.h, which must be included.
-// SWIG includes Python.h automatically, but we explicitly include it here to ensure
-// moduleobject.h has all the definitions it needs (moduleobject.h depends on Python.h)
+// These require the full Python API, not the limited API.
+// IMPORTANT: Do NOT define Py_LIMITED_API here - it restricts access to these symbols
+// We include Python.h first, then moduleobject.h to ensure all definitions are available
+#ifndef Py_PYTHON_H
 #include <Python.h>
+#endif
+// Now include moduleobject.h - it depends on Python.h being fully included
+// This must be included for SWIG 4.4.0 compatibility with all Python versions (3.8-3.13)
 #include <moduleobject.h>
 // For Python < 3.5, Py_mod_exec doesn't exist, so define it
 #if PY_VERSION_HEX < 0x03050000
@@ -68,6 +71,10 @@
 %{
 // CRITICAL: Include moduleobject.h for SWIG 4.4.0 compatibility
 // This ensures Py_mod_exec, PyModuleDef_Slot, and PyModuleDef_Init are available
+// Note: Python.h should already be included from %begin block, but ensure it's here too
+#ifndef Py_PYTHON_H
+#include <Python.h>
+#endif
 #include <moduleobject.h>
 // For Python < 3.5, Py_mod_exec doesn't exist, so define it
 #if PY_VERSION_HEX < 0x03050000
