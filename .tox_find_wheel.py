@@ -302,9 +302,9 @@ def main():
         
         # Copy Python wrapper files (only from matching build directory)
         wrapper_files = glob.glob(os.path.join(matching_dir, '*.py'))
-        # Filter out __pycache__ and only get actual wrapper files
+        # Filter out __pycache__ and only get actual wrapper files (NOT __init__.py - we create that separately)
         wrapper_files = [f for f in wrapper_files if os.path.basename(f) in 
-                        ['nrf_ble_driver_sd_api_v2.py', 'nrf_ble_driver_sd_api_v5.py', '__init__.py']]
+                        ['nrf_ble_driver_sd_api_v2.py', 'nrf_ble_driver_sd_api_v5.py']]
         
         if wrapper_files:
             print(f"Copying {len(wrapper_files)} Python wrapper file(s) to pc_ble_driver_py/lib/")
@@ -314,6 +314,13 @@ def main():
                 print(f"  ✓ Copied {os.path.basename(wrapper)}")
         else:
             print("⚠️  No Python wrapper files found to copy")
+        
+        # CRITICAL: Ensure __init__.py exists so lib/ can be imported as a package
+        init_py = os.path.join('pc_ble_driver_py/lib', '__init__.py')
+        if not os.path.exists(init_py):
+            print(f"  ✓ Creating __init__.py in lib/ directory")
+            with open(init_py, 'w') as f:
+                f.write('# Package marker file for pc_ble_driver_py.lib\n')
         
         # CRITICAL: Final verification - ensure all .so files are for correct Python version
         final_so = glob.glob(os.path.join('pc_ble_driver_py/lib', '*.so'))
