@@ -88,7 +88,7 @@ jobs:
 
   build-arm64:
     name: Build ARM64 Wheels (Apple Silicon macOS)
-    runs-on: macos-14  # Apple Silicon runner for ARM64 builds
+    runs-on: macos-13  # Use macos-13 (more available, can build ARM64)
     strategy:
       matrix:
         python-version: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13']
