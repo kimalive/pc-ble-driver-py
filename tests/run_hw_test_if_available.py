@@ -16,11 +16,51 @@ import glob
 import platform
 from pathlib import Path
 
+def find_system_serial_ports():
+    """
+    Fallback: Find serial ports by checking system /dev directory.
+    Returns list of port strings that might be Nordic devices.
+    """
+    system = platform.system()
+    ports = []
+    
+    if system == 'Darwin':  # macOS
+        # Common Nordic device patterns on macOS
+        # Prefer /dev/tty.* over /dev/cu.* (tty is preferred for serial communication)
+        patterns = [
+            '/dev/tty.usbmodem*',  # Nordic USB CDC
+            '/dev/tty.usbserial*',  # Generic USB serial
+        ]
+        for pattern in patterns:
+            found = glob.glob(pattern)
+            ports.extend(found)
+    elif system == 'Linux':
+        # Common patterns on Linux
+        patterns = [
+            '/dev/ttyACM*',  # USB CDC
+            '/dev/ttyUSB*',  # USB serial
+        ]
+        for pattern in patterns:
+            found = glob.glob(pattern)
+            ports.extend(found)
+    elif system == 'Windows':
+        # Windows COM ports - would need pyserial
+        # For now, skip Windows fallback
+        pass
+    
+    # Remove duplicates and sort
+    ports = sorted(list(set(ports)))
+    return ports
+
 def find_available_ports():
     """
     Automatically detect available Nordic serial ports.
     Returns list of port strings, or empty list if none found.
+    Uses dual detection: BLEDriver.enum_serial_ports() + system port fallback.
     """
+    ports_found = []
+    
+    # Method 1: Try BLEDriver.enum_serial_ports() (most reliable)
     try:
         # Set config before importing BLEDriver
         from pc_ble_driver_py import config
@@ -30,25 +70,37 @@ def find_available_ports():
         
         from pc_ble_driver_py.ble_driver import BLEDriver
         
-        print("  Enumerating serial ports...")
+        print("  Method 1: Enumerating via BLEDriver.enum_serial_ports()...")
         ports = BLEDriver.enum_serial_ports()
-        if not ports:
-            print("  No ports found")
-            return []
-        
-        # Return list of port strings
-        port_list = [p.port for p in ports]
-        print(f"  Found {len(port_list)} port(s)")
-        return port_list
+        if ports:
+            ports_found = [p.port for p in ports]
+            print(f"  ✅ Found {len(ports_found)} port(s) via BLEDriver:")
+            for port in ports_found:
+                print(f"     - {port}")
+            return ports_found
+        else:
+            print("  ⚠️  No ports found via BLEDriver.enum_serial_ports()")
     except ImportError as e:
-        print(f"Warning: Could not import pc_ble_driver_py: {e}")
-        print("  Make sure the package is installed (pip install -e .)")
-        return []
+        print(f"  ⚠️  Could not import pc_ble_driver_py: {e}")
+        print("     Make sure the package is installed")
     except Exception as e:
-        print(f"Warning: Could not enumerate serial ports: {e}")
+        print(f"  ⚠️  Error enumerating via BLEDriver: {e}")
         import traceback
         traceback.print_exc()
-        return []
+    
+    # Method 2: Fallback to system serial port detection
+    print("  Method 2: Checking system serial ports...")
+    system_ports = find_system_serial_ports()
+    if system_ports:
+        print(f"  ✅ Found {len(system_ports)} potential serial port(s):")
+        for port in system_ports:
+            print(f"     - {port}")
+        print("  Note: These may not all be Nordic devices, but will be tried")
+        return system_ports
+    else:
+        print("  ⚠️  No system serial ports found")
+    
+    return []
 
 def main():
     print("=" * 60)
