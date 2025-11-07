@@ -35,6 +35,10 @@ jobs:
         run: |
           ./vcpkg/vcpkg install nrf-ble-driver --triplet x64-osx
 
+      - name: Install build dependencies
+        run: |
+          brew install swig
+
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
