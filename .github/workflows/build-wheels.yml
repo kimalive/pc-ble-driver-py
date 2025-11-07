@@ -12,7 +12,7 @@ env:
 jobs:
   build-x86_64:
     name: Build x86_64 Wheels (Intel macOS)
-    runs-on: macos-13  # Intel runner for x86_64 builds
+    runs-on: macos-15-intel  # Updated from macos-13 (deprecated)
     strategy:
       matrix:
         python-version: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13']
