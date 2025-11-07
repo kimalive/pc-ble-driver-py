@@ -146,10 +146,10 @@ def main():
             print(f"  ✓ lib/ directory is clean")
     
     # Check if we should use wheels
-    # Default: Use wheels for Python 3.12 (has import issues with source build)
-    # For other versions, build from source by default
-    default_use_wheels = 'true' if sys.version_info[:2] == (3, 12) else 'false'
-    use_wheels = os.getenv('TOX_USE_WHEELS', default_use_wheels).lower() == 'true'
+    # Default: Build from source for all versions to ensure correct Python version linking
+    # Only use wheels if explicitly requested via TOX_USE_WHEELS=true
+    # This prevents using wheels built with wrong Python version
+    use_wheels = os.getenv('TOX_USE_WHEELS', 'false').lower() == 'true'
     
     if use_wheels:
         wheel = find_wheel()
