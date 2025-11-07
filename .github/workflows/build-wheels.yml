@@ -55,10 +55,13 @@ jobs:
 
       - name: Bundle dependencies into wheel
         if: success()
+        env:
+          VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+          VCPKG_TRIPLET: x64-osx
         run: |
           WHEEL=$(ls -t dist/pc_ble_driver_py-*-cp38-abi3-*x86_64*.whl 2>/dev/null | head -1)
           if [ -n "$WHEEL" ] && [ -f "$WHEEL" ]; then
-            python ${{ github.workspace }}/bundle_into_wheel.py "$WHEEL" || true
+            python ${{ github.workspace }}/bundle_into_wheel.py "$WHEEL" || echo "Bundling skipped (optional)"
           fi
 
       - name: Upload x86_64 wheel

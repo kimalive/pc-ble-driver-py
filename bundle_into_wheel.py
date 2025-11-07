@@ -11,7 +11,10 @@ import tempfile
 from pathlib import Path
 
 VCPKG_ROOT = os.getenv('VCPKG_ROOT', '/Users/kbalive/Devel/OpenSource/vcpkg')
-VCPKG_LIB_DIR = f"{VCPKG_ROOT}/installed/arm64-osx/lib"
+# Determine architecture from VCPKG_ROOT or environment
+# Default to arm64-osx for local builds, but allow override via VCPKG_TRIPLET
+VCPKG_TRIPLET = os.getenv('VCPKG_TRIPLET', 'arm64-osx')
+VCPKG_LIB_DIR = f"{VCPKG_ROOT}/installed/{VCPKG_TRIPLET}/lib"
 
 def bundle_dependencies(wheel_path):
     """Bundle nrf-ble-driver dependencies into a wheel."""
