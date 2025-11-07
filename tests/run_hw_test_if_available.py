@@ -12,6 +12,8 @@ This script:
 import os
 import sys
 import subprocess
+import glob
+import platform
 from pathlib import Path
 
 def find_available_ports():
