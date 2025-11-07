@@ -198,27 +198,33 @@ def main():
                 for so_file in wheel_so_files:
                     if not verify_so_python_version(so_file, python_version):
                         print(f"✗ ERROR: Wheel {os.path.basename(wheel)} contains .so files for wrong Python version!")
-                        print(f"   This will cause segfaults! Building from source instead...")
+                        print(f"   This will cause segfaults!")
+                        print(f"   Expected Python {python_version}, but wheel contains wrong version")
                         wheel_ok = False
                         break
                 
                 if not wheel_ok:
-                    # Fall through to build from source
-                    pass
+                    print(f"✗ ERROR: Cannot use wheel - wrong Python version")
+                    print(f"   Rebuild the wheel for Python {python_version} or set TOX_BUILD_FROM_SOURCE=true")
+                    return 1
                 else:
                     result = subprocess.run([
                         sys.executable, '-m', 'pip', 'install', '--force-reinstall', '--no-deps', wheel
                     ])
                     if result.returncode == 0:
                         print(f"✓ Successfully installed wheel (verified Python {python_version})")
-                    return result.returncode
-            else:
-                print("⚠️  No matching wheel found in dist/")
-                print("   Expected: dist/*{}-abi3-*{}*.whl".format(get_python_tag(), get_architecture()))
-                print("   Building from source as fallback...")
+                        return 0
+                    else:
+                        print(f"✗ ERROR: Failed to install wheel")
+                        return result.returncode
         else:
-            print("Building from source (TOX_BUILD_FROM_SOURCE=true or no wheels found)")
-            print("   Set TOX_BUILD_FROM_SOURCE=false to use wheels from dist/")
+            print("✗ ERROR: No matching wheel found in dist/")
+            print(f"   Expected: dist/*{get_python_tag()}-abi3-*{get_architecture()}*.whl")
+            print(f"   Pre-build wheels before running tox, or set TOX_BUILD_FROM_SOURCE=true to build from source")
+            return 1
+    else:
+        print("Building from source (TOX_BUILD_FROM_SOURCE=true)")
+        print("   Set TOX_BUILD_FROM_SOURCE=false to use wheels from dist/")
     
     # CRITICAL: Clean _skbuild directory to ensure we get a fresh build for this Python version
     # Old build artifacts from different Python versions can cause cross-version contamination
