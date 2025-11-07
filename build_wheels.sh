@@ -63,6 +63,9 @@ build_arm64_wheel() {
     # CRITICAL: Pass PYTHON_EXECUTABLE to CMake to ensure it uses the correct Python version
     # Without this, CMake might find a different Python (e.g., Python 3.13 when building for 3.12)
     # Also tell CMake to prefer our explicitly provided Python over vcpkg's finder
+    # CRITICAL: Capture wheel list BEFORE building to identify the NEW wheel
+    local wheels_before=$(ls -1 dist/pc_ble_driver_py-*-cp38-abi3-*.whl 2>/dev/null | grep -v ".tmp\." | sort)
+    
     # CRITICAL: Check if build actually succeeded - if it fails, don't try to find/rename wheels
     build_log="/tmp/build_py${python_version//./}.log"
     if ! $python_exe setup.py bdist_wheel --build-type Release -- \
@@ -77,18 +80,30 @@ build_arm64_wheel() {
         return 1
     fi
     
-    # Verify build actually created a wheel
-    if ! ls dist/pc_ble_driver_py-*-cp38-abi3-*.whl 1>/dev/null 2>&1; then
-        echo "  ✗ Build completed but no wheel found for Python ${python_version}"
+    # CRITICAL: Find the NEW wheel by comparing before/after lists
+    # This ensures we get the wheel we just built, not an older one
+    local wheels_after=$(ls -1 dist/pc_ble_driver_py-*-cp38-abi3-*.whl 2>/dev/null | grep -v ".tmp\." | sort)
+    local wheel=""
+    
+    # Find the new wheel (in after but not in before)
+    if [ -n "$wheels_after" ]; then
+        if [ -z "$wheels_before" ]; then
+            # No wheels before, so the first one is the new one
+            wheel=$(echo "$wheels_after" | head -1)
+        else
+            # Use comm to find wheels in after but not in before
+            wheel=$(comm -13 <(echo "$wheels_before") <(echo "$wheels_after") | head -1)
+        fi
+    fi
+    
+    # Verify we found a new wheel
+    if [ -z "$wheel" ] || [ ! -f "$wheel" ]; then
+        echo "  ✗ Build completed but could not identify new wheel for Python ${python_version}"
+        echo "  Before: $(echo "$wheels_before" | wc -l | tr -d ' ') wheels"
+        echo "  After: $(echo "$wheels_after" | wc -l | tr -d ' ') wheels"
         echo "  Check $build_log for details"
         return 1
     fi
-    
-    # CRITICAL: Immediately find and rename the NEWEST cp38-abi3 wheel to temp
-            # This must happen IMMEDIATELY after bdist_wheel to prevent the next Python
-            # version from overwriting it. We use the NEWEST wheel because that's definitely
-            # the one we just built.
-            local wheel=$(ls -t dist/pc_ble_driver_py-*-cp38-abi3-*.whl 2>/dev/null | grep -v ".tmp\." | head -1)
             
             if [ -n "$wheel" ] && [ -f "$wheel" ]; then
                 # CRITICAL: Immediately rename to a unique temporary name to prevent overwriting
@@ -139,6 +154,9 @@ build_x86_64_wheel() {
         python_exe_abs="$(cd "$(dirname "$python_exe")" && pwd)/$(basename "$python_exe")"
     fi
     
+    # CRITICAL: Capture wheel list BEFORE building to identify the NEW wheel
+    local wheels_before=$(ls -1 dist/pc_ble_driver_py-*-cp38-abi3-*x86_64*.whl 2>/dev/null | grep -v ".tmp\." | sort)
+    
     # Try to build x86_64 wheel
     # This requires Intel Python or Rosetta
     # CRITICAL: Pass PYTHON_EXECUTABLE to CMake to ensure it uses the correct Python version
@@ -161,8 +179,26 @@ build_x86_64_wheel() {
     
     # Only proceed if build actually succeeded
     if [ "$build_succeeded" = "1" ]; then
-        # CRITICAL: Immediately find and rename the NEWEST x86_64 cp38-abi3 wheel to temp
-        local wheel=$(ls -t dist/pc_ble_driver_py-*-cp38-abi3-*x86_64*.whl 2>/dev/null | grep -v ".tmp\." | head -1)
+        # CRITICAL: Find the NEW wheel by comparing before/after lists
+        local wheels_after=$(ls -1 dist/pc_ble_driver_py-*-cp38-abi3-*x86_64*.whl 2>/dev/null | grep -v ".tmp\." | sort)
+        local wheel=""
+        
+        # Find the new wheel (in after but not in before)
+        if [ -n "$wheels_after" ]; then
+            if [ -z "$wheels_before" ]; then
+                # No wheels before, so the first one is the new one
+                wheel=$(echo "$wheels_after" | head -1)
+            else
+                # Use comm to find wheels in after but not in before
+                wheel=$(comm -13 <(echo "$wheels_before") <(echo "$wheels_after") | head -1)
+            fi
+        fi
+        
+        # Verify we found a new wheel
+        if [ -z "$wheel" ] || [ ! -f "$wheel" ]; then
+            echo "  ⚠️  Build completed but could not identify new x86_64 wheel for Python ${python_version}"
+            return 1
+        fi
         
         if [ -n "$wheel" ] && [ -f "$wheel" ]; then
             local python_tag="cp${python_version//./}"
