@@ -221,32 +221,6 @@ foreach(SD_API_VER ${SD_API_VERS})
     if(MSFT_NON_STANDARD_COMPILER)
         target_include_directories(${PYTHON_MODULE_${SD_API_VER}} PRIVATE ${PC_BLE_DRIVER_PY_OUTDIR})
     endif()
-    
-    # CRITICAL: For SWIG 4.4.0 compatibility, force include moduleobject.h in generated wrapper code
-    # SWIG 4.4.0 generates code using Py_mod_exec, PyModuleDef_Slot, PyModuleDef_Init
-    # These require moduleobject.h. Use -include compiler flag to force it at compile time.
-    if(APPLE)
-        # Find moduleobject.h - it should be in PYTHON_INCLUDE_DIR
-        find_file(MODULEOBJECT_H moduleobject.h 
-            PATHS ${PYTHON_INCLUDE_DIR} 
-            NO_DEFAULT_PATH
-            NO_CMAKE_FIND_ROOT_PATH
-        )
-        if(MODULEOBJECT_H)
-            # Force include moduleobject.h in the generated wrapper code compilation
-            target_compile_options(${PYTHON_MODULE_${SD_API_VER}} PRIVATE "-include${MODULEOBJECT_H}")
-            message(STATUS "Added -include for moduleobject.h: ${MODULEOBJECT_H}")
-        else()
-            # Fallback: try to construct path
-            set(MODULEOBJECT_H_FALLBACK "${PYTHON_INCLUDE_DIR}/moduleobject.h")
-            if(EXISTS "${MODULEOBJECT_H_FALLBACK}")
-                target_compile_options(${PYTHON_MODULE_${SD_API_VER}} PRIVATE "-include${MODULEOBJECT_H_FALLBACK}")
-                message(STATUS "Added -include for moduleobject.h (fallback): ${MODULEOBJECT_H_FALLBACK}")
-            else()
-                message(WARNING "Could not find moduleobject.h in ${PYTHON_INCLUDE_DIR} - SWIG 4.4.0 builds may fail")
-            endif()
-        endif()
-    endif()
 
     set(LINK_LIBRARIES nrf::nrf_ble_driver_sd_api_v${SD_API_VER}_${NRF_BLE_DRIVER_LINKAGE_TYPE})
     if (WIN32 OR APPLE)
