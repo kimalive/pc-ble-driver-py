@@ -37,7 +37,11 @@ jobs:
 
       - name: Install build dependencies
         run: |
+          # Install SWIG (latest version - our fix works with both 4.3.x and 4.4.0)
+          # We include Python.h and moduleobject.h in the %begin block to ensure compatibility
           brew install swig
+          # Verify SWIG installation
+          swig -version || echo "SWIG not found in PATH"
 
       - name: Install Python dependencies
         run: |
