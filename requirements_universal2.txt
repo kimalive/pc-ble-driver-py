@@ -1,0 +1,41 @@
+# Cross-platform requirements.txt using Universal2 for macOS
+# Supports: Windows, Linux, macOS (both Intel and Apple Silicon)
+# Python: 3.8 or later
+
+# ============================================================================
+# pc-ble-driver-py with macOS rpath fix
+# Platform-specific wheels using environment markers
+# ============================================================================
+
+# macOS (Universal2 - works on both Intel and Apple Silicon)
+# Note: macosx_26_0 means built for macOS 26, but works on macOS 11.0+ (backward compatible)
+# To create this wheel: Use create_universal2_wheel.sh to combine ARM64 and x86_64 wheels
+./wheels/pc_ble_driver_py-0.17.10-cp38-abi3-macosx_26_0_universal2.whl; sys_platform == "darwin"
+
+# Linux (x86_64) - uncomment if you have this wheel
+# ./wheels/pc_ble_driver_py-0.17.10-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl; sys_platform == "linux" and platform_machine == "x86_64"
+
+# Linux (ARM64) - uncomment if you have this wheel
+# ./wheels/pc_ble_driver_py-0.17.10-cp38-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl; sys_platform == "linux" and platform_machine == "aarch64"
+
+# Windows (x64) - uncomment if you have this wheel
+# ./wheels/pc_ble_driver_py-0.17.10-cp38-abi3-win_amd64.whl; sys_platform == "win32" and platform_machine == "AMD64"
+
+# Windows (x86) - uncomment if you have this wheel
+# ./wheels/pc_ble_driver_py-0.17.10-cp38-abi3-win32.whl; sys_platform == "win32" and platform_machine == "x86"
+
+# ============================================================================
+# Required dependencies (all platforms)
+# ============================================================================
+wrapt>=1.0.0
+cryptography>=3.0.0
+
+# ============================================================================
+# Notes:
+# ============================================================================
+# 1. The wheel uses cp38-abi3 which means it works with Python 3.8+
+# 2. macosx_26_0 means built for macOS 26, but works on macOS 11.0+ (backward compatible)
+# 3. Universal2 wheel works on both Intel and Apple Silicon Macs
+# 4. To create Universal2 wheel: Build ARM64 and x86_64 separately, then use create_universal2_wheel.sh
+# 5. The abi3 tag ensures compatibility across Python 3.8+ versions
+# 6. Environment markers (after semicolon) ensure only the correct wheel is installed

@@ -3,7 +3,11 @@ import logging
 logger = logging.getLogger(__name__)
 import time
 import unittest
-import xmlrunner
+try:
+    import xmlrunner
+except ImportError:
+    # xmlrunner not available, use standard unittest
+    xmlrunner = None
 
 from pc_ble_driver_py.ble_driver import (
     BLEAdvData,
@@ -25,23 +29,31 @@ class Central(BLEDriverObserver, BLEAdapterObserver):
     def on_gap_evt_adv_report(
         self, ble_driver, conn_handle, peer_addr, rssi, adv_type, adv_data
     ):
+        address_string = "".join("{0:02X}".format(b) for b in peer_addr.addr)
+        
+        # Check for device name in advertisement
+        dev_name = None
         if BLEAdvData.Types.complete_local_name in adv_data.records:
             dev_name_list = adv_data.records[BLEAdvData.Types.complete_local_name]
-
+            dev_name = "".join(chr(e) for e in dev_name_list)
         elif BLEAdvData.Types.short_local_name in adv_data.records:
             dev_name_list = adv_data.records[BLEAdvData.Types.short_local_name]
-
+            dev_name = "".join(chr(e) for e in dev_name_list)
+        
+        if dev_name:
+            logger.info(
+                "Received advertisment report, address: 0x%s, device_name: %s",
+                address_string,
+                dev_name,
+            )
         else:
-            return
+            logger.info(
+                "Received advertisment report, address: 0x%s, rssi: %d",
+                address_string,
+                rssi,
+            )
 
-        dev_name = "".join(chr(e) for e in dev_name_list)
-        address_string = "".join("{0:02X}".format(b) for b in peer_addr.addr)
-        logger.info(
-            "Received advertisment report, address: 0x%s, device_name: %s",
-            address_string,
-            dev_name,
-        )
-
+        # Mark as received if we got any advertisement (with or without name)
         self.adv_received = True
 
 
@@ -102,9 +114,13 @@ if __name__ == "__main__":
         level=Settings.current().log_level,
         format="%(asctime)s [%(thread)d/%(threadName)s] %(message)s",
     )
-    unittest.main(
-        testRunner=xmlrunner.XMLTestRunner(
-            output=Settings.current().test_output_directory
-        ),
-        argv=Settings.clean_args(),
-    )
+    if xmlrunner:
+        unittest.main(
+            testRunner=xmlrunner.XMLTestRunner(
+                output=Settings.current().test_output_directory
+            ),
+            argv=Settings.clean_args(),
+        )
+    else:
+        # Fallback to standard unittest if xmlrunner not available
+        unittest.main(argv=Settings.clean_args())

@@ -1,0 +1,43 @@
+# Cross-platform requirements.txt for pc-ble-driver-py
+# Supports: Windows, Linux, macOS
+# Python: 3.8 or later
+
+# ============================================================================
+# pc-ble-driver-py with macOS rpath fix
+# ============================================================================
+
+# macOS (Apple Silicon / ARM64)
+# Note: macosx_26_0 means built for macOS 26 (macOS 15 Sequoia)
+# but is backward compatible with macOS 11.0+ (Big Sur and later)
+./wheels/pc_ble_driver_py-0.17.10-cp38-abi3-macosx_26_0_arm64.whl; sys_platform == "darwin" and platform_machine == "arm64"
+
+# macOS (Intel / x86_64) - if you have this wheel
+# ./wheels/pc_ble_driver_py-0.17.10-cp38-abi3-macosx_26_0_x86_64.whl; sys_platform == "darwin" and platform_machine == "x86_64"
+
+# Linux (x86_64) - if you have this wheel
+# ./wheels/pc_ble_driver_py-0.17.10-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl; sys_platform == "linux" and platform_machine == "x86_64"
+
+# Linux (ARM64) - if you have this wheel
+# ./wheels/pc_ble_driver_py-0.17.10-cp38-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl; sys_platform == "linux" and platform_machine == "aarch64"
+
+# Windows (x64) - if you have this wheel
+# ./wheels/pc_ble_driver_py-0.17.10-cp38-abi3-win_amd64.whl; sys_platform == "win32" and platform_machine == "AMD64"
+
+# Windows (x86) - if you have this wheel
+# ./wheels/pc_ble_driver_py-0.17.10-cp38-abi3-win32.whl; sys_platform == "win32" and platform_machine == "x86"
+
+# ============================================================================
+# Required dependencies (all platforms)
+# ============================================================================
+wrapt>=1.0.0
+cryptography>=3.0.0
+
+# ============================================================================
+# Notes:
+# ============================================================================
+# 1. The wheel uses cp38-abi3 which means it works with Python 3.8+
+# 2. macosx_26_0 means built for macOS 26, but works on macOS 11.0+ (backward compatible)
+# 3. You need to build/obtain wheels for each platform you want to support
+# 4. Uncomment the lines for platforms you have wheels for
+# 5. The abi3 tag ensures compatibility across Python 3.8+ versions
+

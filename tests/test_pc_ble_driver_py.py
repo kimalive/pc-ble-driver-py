@@ -38,6 +38,10 @@
 import logging
 logger = logging.getLogger(__name__)
 
+# Set config before importing ble_driver
+from pc_ble_driver_py import config
+config.__conn_ic_id__ = 'NRF52'  # Set default IC identifier
+
 from pc_ble_driver_py.ble_driver import *
 
 logging.basicConfig()

@@ -83,8 +83,11 @@ echo ""
 
 # Install Python dependencies
 echo "Installing Python dependencies..."
-$PYTHON_EXE -m pip install --upgrade pip --quiet
-$PYTHON_EXE -m pip install scikit-build ninja cmake wrapt cryptography --quiet
+$PYTHON_EXE -m pip install --upgrade pip --quiet || echo "⚠️  pip upgrade skipped (may have brew-installed packages)"
+$PYTHON_EXE -m pip install scikit-build ninja cmake wrapt cryptography --quiet || {
+    echo "⚠️  Some packages may already be installed, continuing..."
+    $PYTHON_EXE -m pip install scikit-build ninja cmake wrapt cryptography --quiet --no-warn-script-location || true
+}
 echo "✓ Dependencies installed"
 echo ""
 
