@@ -109,41 +109,60 @@ def verify_so_python_version(so_file, expected_version):
         print(f"  ⚠️  Could not verify {os.path.basename(so_file)}: {e}")
         return True  # Assume OK if we can't check
 
-def main():
-    # CRITICAL: Clean old .so files first to prevent cross-version contamination
-    # This MUST happen before any build or wheel installation
+def clean_lib_directory():
+    """Comprehensively clean the lib directory to prevent cross-version contamination."""
     lib_dir = 'pc_ble_driver_py/lib'
     python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
     
-    if os.path.exists(lib_dir):
-        # Clean ALL .so files (they might be from wrong Python version)
-        old_so_files = glob.glob(os.path.join(lib_dir, '*.so'))
-        if old_so_files:
-            print(f"🧹 Cleaning {len(old_so_files)} old .so file(s) to prevent version mismatch...")
-            for old_so in old_so_files:
-                # Verify before removing (for debugging)
-                if not verify_so_python_version(old_so, python_version):
-                    print(f"  ⚠️  Removing incompatible .so file: {os.path.basename(old_so)}")
+    if not os.path.exists(lib_dir):
+        os.makedirs(lib_dir, exist_ok=True)
+        return
+    
+    # Clean ALL .so files (they might be from wrong Python version)
+    old_so_files = glob.glob(os.path.join(lib_dir, '*.so'))
+    if old_so_files:
+        print(f"🧹 Cleaning {len(old_so_files)} old .so file(s) to prevent version mismatch...")
+        for old_so in old_so_files:
+            # Verify before removing (for debugging)
+            if not verify_so_python_version(old_so, python_version):
+                print(f"  ⚠️  Removing incompatible .so file: {os.path.basename(old_so)}")
+            try:
                 os.remove(old_so)
                 print(f"  ✓ Removed {os.path.basename(old_so)}")
-        
-        # Also clean old Python wrapper files
-        old_py_files = [f for f in glob.glob(os.path.join(lib_dir, '*.py')) 
-                       if os.path.basename(f) in ['nrf_ble_driver_sd_api_v2.py', 'nrf_ble_driver_sd_api_v5.py', '__init__.py']]
-        if old_py_files:
-            print(f"🧹 Cleaning {len(old_py_files)} old Python wrapper file(s)...")
-            for old_py in old_py_files:
+            except Exception as e:
+                print(f"  ✗ Failed to remove {os.path.basename(old_so)}: {e}")
+    
+    # Also clean old Python wrapper files
+    old_py_files = [f for f in glob.glob(os.path.join(lib_dir, '*.py')) 
+                   if os.path.basename(f) in ['nrf_ble_driver_sd_api_v2.py', 'nrf_ble_driver_sd_api_v5.py', '__init__.py']]
+    if old_py_files:
+        print(f"🧹 Cleaning {len(old_py_files)} old Python wrapper file(s)...")
+        for old_py in old_py_files:
+            try:
                 os.remove(old_py)
                 print(f"  ✓ Removed {os.path.basename(old_py)}")
-        
-        # Verify directory is clean
-        remaining_so = glob.glob(os.path.join(lib_dir, '*.so'))
-        if remaining_so:
-            print(f"  ⚠️  WARNING: {len(remaining_so)} .so file(s) still remain after cleaning!")
-            for so in remaining_so:
-                print(f"     {os.path.basename(so)}")
-        else:
-            print(f"  ✓ lib/ directory is clean")
+            except Exception as e:
+                print(f"  ✗ Failed to remove {os.path.basename(old_py)}: {e}")
+    
+    # Verify directory is clean - CRITICAL: fail if not clean
+    remaining_so = glob.glob(os.path.join(lib_dir, '*.so'))
+    if remaining_so:
+        print(f"  ✗ ERROR: {len(remaining_so)} .so file(s) still remain after cleaning!")
+        for so in remaining_so:
+            print(f"     {os.path.basename(so)}")
+        print(f"  This will cause cross-version contamination!")
+        return False
+    else:
+        print(f"  ✓ lib/ directory is clean")
+        return True
+
+def main():
+    # CRITICAL: Clean old .so files first to prevent cross-version contamination
+    # This MUST happen before any build or wheel installation
+    # Fail if cleaning doesn't work
+    if not clean_lib_directory():
+        print("✗ Failed to clean lib/ directory - aborting to prevent contamination")
+        return 1
     
     # Check if we should use wheels
     # Default: Build from source for all versions to ensure correct Python version linking
@@ -155,12 +174,33 @@ def main():
         wheel = find_wheel()
         if wheel:
             print(f"Installing wheel: {os.path.basename(wheel)}")
-            result = subprocess.run([
-                sys.executable, '-m', 'pip', 'install', '--force-reinstall', '--no-deps', wheel
-            ])
-            if result.returncode == 0:
-                print(f"✓ Successfully installed wheel")
-            return result.returncode
+            # CRITICAL: Verify wheel is for correct Python version before installing
+            # Extract and check the .so files in the wheel
+            import tempfile
+            import zipfile
+            with tempfile.TemporaryDirectory() as tmpdir:
+                with zipfile.ZipFile(wheel, 'r') as z:
+                    z.extractall(tmpdir)
+                # Check .so files in the wheel
+                wheel_so_files = glob.glob(os.path.join(tmpdir, 'pc_ble_driver_py/lib/*.so'))
+                wheel_ok = True
+                for so_file in wheel_so_files:
+                    if not verify_so_python_version(so_file, python_version):
+                        print(f"✗ ERROR: Wheel {os.path.basename(wheel)} contains .so files for wrong Python version!")
+                        print(f"   This will cause segfaults! Building from source instead...")
+                        wheel_ok = False
+                        break
+                
+                if not wheel_ok:
+                    # Fall through to build from source
+                    pass
+                else:
+                    result = subprocess.run([
+                        sys.executable, '-m', 'pip', 'install', '--force-reinstall', '--no-deps', wheel
+                    ])
+                    if result.returncode == 0:
+                        print(f"✓ Successfully installed wheel (verified Python {python_version})")
+                    return result.returncode
         else:
             print("⚠️  No matching wheel found in dist/")
             print("   Expected: dist/*{}-abi3-*{}*.whl".format(get_python_tag(), get_architecture()))
