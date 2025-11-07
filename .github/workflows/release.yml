@@ -44,7 +44,15 @@ jobs:
 
       - name: Install build dependencies
         run: |
-          brew install swig
+          # Uninstall any existing SWIG to avoid conflicts
+          brew uninstall swig swig@4 2>/dev/null || true
+          # Install SWIG 4.3.x for Python 3.8-3.9 compatibility (4.4.0 has issues)
+          brew install swig@4
+          # Link swig@4 to make it available as 'swig' and ensure it's in PATH
+          brew link --overwrite --force swig@4 || true
+          # Verify SWIG version (should be 4.3.x, not 4.4.0)
+          swig -version || echo "SWIG not found in PATH"
+          which swig || echo "swig command not found"
 
       - name: Install Python dependencies
         run: |
@@ -186,7 +194,15 @@ jobs:
 
       - name: Install build dependencies
         run: |
-          brew install swig
+          # Uninstall any existing SWIG to avoid conflicts
+          brew uninstall swig swig@4 2>/dev/null || true
+          # Install SWIG 4.3.x for Python 3.8-3.9 compatibility (4.4.0 has issues)
+          brew install swig@4
+          # Link swig@4 to make it available as 'swig' and ensure it's in PATH
+          brew link --overwrite --force swig@4 || true
+          # Verify SWIG version (should be 4.3.x, not 4.4.0)
+          swig -version || echo "SWIG not found in PATH"
+          which swig || echo "swig command not found"
 
       - name: Install Python dependencies
         run: |
