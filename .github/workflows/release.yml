@@ -87,7 +87,7 @@ jobs:
     needs: [build-x86_64, build-arm64]
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write  # Required to create/delete releases
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -111,6 +111,14 @@ jobs:
           pattern: wheel-arm64-*
           merge-multiple: true
 
+      - name: Delete existing release (if any)
+        # Delete existing release to allow overwriting with same tag
+        run: |
+          gh release delete "${{ github.event.inputs.tag }}" --yes 2>/dev/null || echo "No existing release to delete"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
@@ -130,15 +138,20 @@ jobs:
             ## Installation
             
             ```bash
+            # For x86_64 (Intel Mac)
             pip install https://github.com/kimalive/pc-ble-driver-py/releases/download/${{ github.event.inputs.tag }}/pc_ble_driver_py-${{ github.event.inputs.version }}-cp312-abi3-macosx_26_0_x86_64.whl
+            
+            # For ARM64 (Apple Silicon)
+            pip install https://github.com/kimalive/pc-ble-driver-py/releases/download/${{ github.event.inputs.tag }}/pc_ble_driver_py-${{ github.event.inputs.version }}-cp312-abi3-macosx_26_0_arm64.whl
             ```
             
-            Replace `cp312` and `x86_64`/`arm64` with your Python version and architecture.
+            Replace `cp312` with your Python version (cp38, cp39, cp310, cp311, cp312, cp313).
           files: |
             wheels/x86_64/*.whl
             wheels/arm64/*.whl
           draft: false
           prerelease: false
+          make_latest: true
 
   build-arm64:
     name: Build ARM64 Wheels (Apple Silicon)
