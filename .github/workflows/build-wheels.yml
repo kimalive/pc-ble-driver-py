@@ -1,6 +1,15 @@
-name: Build Wheels (x86_64 and ARM64)
+name: Build Wheels and Release
 on:
-  workflow_dispatch:  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., 0.17.11)'
+        required: true
+        type: string
+      tag:
+        description: 'Git tag (e.g., v0.17.11)'
+        required: true
+        type: string
   push:
     branches:
       - master
@@ -168,3 +177,92 @@ jobs:
           name: wheel-arm64-py${{ matrix.python-version }}
           path: dist/*arm64*.whl
           if-no-files-found: warn
+
+  create-release:
+    name: Create Release
+    needs: [build-x86_64, build-arm64]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.tag != ''
+    permissions:
+      contents: write  # Required to create/delete releases
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download x86_64 wheels
+        uses: actions/download-artifact@v4
+        with:
+          path: wheels/x86_64
+          pattern: wheel-x86_64-*
+          merge-multiple: true
+
+      - name: Download ARM64 wheels
+        uses: actions/download-artifact@v4
+        with:
+          path: wheels/arm64
+          pattern: wheel-arm64-*
+          merge-multiple: true
+
+      - name: List downloaded wheels
+        run: |
+          echo "=== x86_64 wheels ==="
+          ls -lh wheels/x86_64/*.whl 2>/dev/null | awk '{print $9, "(" $5 ")"}' || echo "No x86_64 wheels found"
+          echo ""
+          echo "=== ARM64 wheels ==="
+          ls -lh wheels/arm64/*.whl 2>/dev/null | awk '{print $9, "(" $5 ")"}' || echo "No ARM64 wheels found"
+          echo ""
+          echo "=== Expected: 6 x86_64 wheels (cp38, cp39, cp310, cp311, cp312, cp313) ==="
+          echo "=== Expected: 6 ARM64 wheels (cp38, cp39, cp310, cp311, cp312, cp313) ==="
+          X86_COUNT=$(ls -1 wheels/x86_64/*.whl 2>/dev/null | wc -l | tr -d ' ')
+          ARM64_COUNT=$(ls -1 wheels/arm64/*.whl 2>/dev/null | wc -l | tr -d ' ')
+          echo "Found: $X86_COUNT x86_64 wheels, $ARM64_COUNT ARM64 wheels"
+          if [ "$X86_COUNT" -lt 6 ] || [ "$ARM64_COUNT" -lt 6 ]; then
+            echo "WARNING: Expected 12 wheels total, but found $((X86_COUNT + ARM64_COUNT))"
+            echo "This may indicate that some builds failed or wheels were not renamed correctly"
+          fi
+
+      - name: Delete existing release (if any)
+        run: |
+          gh release delete "${{ github.event.inputs.tag }}" --yes 2>/dev/null || echo "No existing release to delete"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag }}
+          name: Release ${{ github.event.inputs.version }}
+          body: |
+            Release ${{ github.event.inputs.version }}
+            
+            ## Wheels Included
+            
+            ### x86_64 (Intel Mac)
+            - Python 3.8, 3.9, 3.10, 3.11, 3.12, 3.13
+            
+            ### ARM64 (Apple Silicon)
+            - Python 3.8, 3.9, 3.10, 3.11, 3.12, 3.13
+            
+            ## Installation
+            
+            ```bash
+            # For x86_64 (Intel Mac)
+            pip install https://github.com/kimalive/pc-ble-driver-py/releases/download/${{ github.event.inputs.tag }}/pc_ble_driver_py-${{ github.event.inputs.version }}-cp312-abi3-macosx_26_0_x86_64.whl
+            
+            # For ARM64 (Apple Silicon)
+            pip install https://github.com/kimalive/pc-ble-driver-py/releases/download/${{ github.event.inputs.tag }}/pc_ble_driver_py-${{ github.event.inputs.version }}-cp312-abi3-macosx_26_0_arm64.whl
+            ```
+            
+            Replace `cp312` with your Python version (cp38, cp39, cp310, cp311, cp312, cp313).
+          files: |
+            wheels/x86_64/*.whl
+            wheels/arm64/*.whl
+          fail_on_unmatched_files: true
+          draft: false
+          prerelease: false
+          make_latest: true

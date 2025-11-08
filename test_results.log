@@ -1,0 +1,148 @@
+==================================================================================
+Testing All Release Wheels: v0.17.11
+System Architecture: arm64
+Primary Architecture: arm64
+==================================================================================
+
+Testing arm64 wheels (primary architecture)...
+
+==================================================================================
+Testing: Python 3.8 (cp38) - arm64
+==================================================================================
+Using Python: .tox/py38/bin/python
+Python version: Python 3.8.18
+Wheel URL: https://github.com/kimalive/pc-ble-driver-py/releases/download/v0.17.11/pc_ble_driver_py-0.17.11-cp38-abi3-macosx_26_0_arm64.whl
+Creating virtual environment...
+Installing wheel...
+Testing imports (similar to tox tests)...
+Python: 3.8.18 (default, Oct 29 2025, 13:04:58) 
+[Clang 19.1.7 ]
+Platform: darwin
+Working directory: /private/var/folders/7k/fyj0lxfn2bvf6kbp03bsr0980000gn/T/test_wheel_import_XXXXXX.PqhnToFIOp
+sys.path (first 3): ['', '/Users/kbalive/.pyenv/versions/3.8.18/lib/python38.zip', '/Users/kbalive/.pyenv/versions/3.8.18/lib/python3.8']
+✓ Imported pc_ble_driver_py
+  Version: 0.17.11
+  Location: /var/folders/7k/fyj0lxfn2bvf6kbp03bsr0980000gn/T/test_wheel_38_arm64_XXXXXX.TDzCapsvvN/lib/python3.8/site-packages/pc_ble_driver_py/__init__.py
+✓ Imported nrf_ble_driver_sd_api_v5
+✓ Imported nrf_ble_driver_sd_api_v2
+✓ Imported BLEDriver (initialization skipped - hardware not available, expected)
+✓ Found 2 .so file(s) in lib/: ['_nrf_ble_driver_sd_api_v5.so', '_nrf_ble_driver_sd_api_v2.so']
+✓ Found 2 Python wrapper file(s) in lib/: ['nrf_ble_driver_sd_api_v5.py', 'nrf_ble_driver_sd_api_v2.py']
+✓ _nrf_ble_driver_sd_api_v5.so uses @rpath for Python library
+✓ _nrf_ble_driver_sd_api_v2.so uses @rpath for Python library
+
+✓ All tests passed!
+✓ Test passed for Python 3.8 (cp38) - arm64
+
+==================================================================================
+Testing: Python 3.9 (cp39) - arm64
+==================================================================================
+Using Python: .tox/py39/bin/python
+Python version: Python 3.9.21
+Wheel URL: https://github.com/kimalive/pc-ble-driver-py/releases/download/v0.17.11/pc_ble_driver_py-0.17.11-cp39-abi3-macosx_26_0_arm64.whl
+Creating virtual environment...
+Installing wheel...
+Testing imports (similar to tox tests)...
+./test_all_release_wheels.sh: line 82:  7921 Segmentation fault: 11  "${venv_python}" -c "
+import sys
+import os
+
+# CRITICAL: Remove source directory from sys.path to ensure we import from installed wheel
+# This matches how tox tests work
+if '__file__' in globals():
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+else:
+    # If running from command line, try to find project root from current working directory
+    cwd = os.getcwd()
+    # Remove current directory and parent if they contain source code
+    for path in [cwd, os.path.dirname(cwd)]:
+        if path in sys.path and os.path.exists(os.path.join(path, 'pc_ble_driver_py', '__init__.py')):
+            sys.path.remove(path)
+            print(f'Removed source directory from sys.path: {path}')
+
+print(f'Python: {sys.version}')
+print(f'Platform: {sys.platform}')
+print(f'Working directory: {os.getcwd()}')
+print(f'sys.path (first 3): {sys.path[:3]}')
+
+# Test basic import
+try:
+    import pc_ble_driver_py
+    print('✓ Imported pc_ble_driver_py')
+    print(f'  Version: {pc_ble_driver_py.__version__}')
+    print(f'  Location: {pc_ble_driver_py.__file__}')
+except Exception as e:
+    print(f'✗ Failed to import pc_ble_driver_py: {e}')
+    import traceback
+    traceback.print_exc()
+    sys.exit(1)
+
+# Test lib imports
+try:
+    import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5
+    print('✓ Imported nrf_ble_driver_sd_api_v5')
+except Exception as e:
+    print(f'✗ Failed to import nrf_ble_driver_sd_api_v5: {e}')
+    import traceback
+    traceback.print_exc()
+    sys.exit(1)
+
+try:
+    import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v2
+    print('✓ Imported nrf_ble_driver_sd_api_v2')
+except Exception as e:
+    print(f'✗ Failed to import nrf_ble_driver_sd_api_v2: {e}')
+    import traceback
+    traceback.print_exc()
+    sys.exit(1)
+
+# Test ble_driver import (may fail on initialization if hardware not available, that's OK)
+try:
+    from pc_ble_driver_py.ble_driver import BLEDriver
+    print('✓ Imported BLEDriver')
+except RuntimeError as e:
+    # RuntimeError about __conn_ic_id__ is expected when hardware is not available
+    if '__conn_ic_id__' in str(e):
+        print('✓ Imported BLEDriver (initialization skipped - hardware not available, expected)')
+    else:
+        print(f'✗ Failed to import BLEDriver: {e}')
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+except Exception as e:
+    print(f'✗ Failed to import BLEDriver: {e}')
+    import traceback
+    traceback.print_exc()
+    sys.exit(1)
+
+# Test library paths (like tox does)
+import os
+lib_dir = os.path.join(os.path.dirname(pc_ble_driver_py.__file__), 'lib')
+if os.path.exists(lib_dir):
+    so_files = [f for f in os.listdir(lib_dir) if f.endswith('.so')]
+    py_files = [f for f in os.listdir(lib_dir) if f.endswith('.py') and 'nrf_ble_driver' in f]
+    print(f'✓ Found {len(so_files)} .so file(s) in lib/: {so_files}')
+    print(f'✓ Found {len(py_files)} Python wrapper file(s) in lib/: {py_files}')
+else:
+    print('⚠️  lib/ directory not found')
+
+# Test .so file linking (check rpath) - skip if otool fails
+if so_files:
+    import subprocess
+    for so_file in so_files:
+        so_path = os.path.join(lib_dir, so_file)
+        try:
+            result = subprocess.run(['otool', '-L', so_path], capture_output=True, text=True, timeout=5, check=False)
+            if result.returncode == 0 and ('@rpath' in result.stdout or 'libpython' in result.stdout):
+                print(f'✓ {so_file} uses @rpath for Python library')
+            elif result.returncode == 0:
+                print(f'⚠️  {so_file} may have hardcoded Python paths')
+            else:
+                print(f'⚠️  Could not check {so_file} linking (otool returned {result.returncode})')
+        except Exception as e:
+            print(f'⚠️  Could not check {so_file} linking: {e}')
+
+print('')
+print('✓ All tests passed!')
+"
+✗ Import tests failed

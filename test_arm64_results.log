@@ -1,0 +1,118 @@
+==================================================================================
+Testing All ARM64 Release Wheels: v0.17.11
+==================================================================================
+
+
+==================================================================================
+Testing: Python 3.8 (cp38) - arm64
+==================================================================================
+Using Python: .tox/py38/bin/python
+Python version: Python 3.8.18
+Wheel URL: https://github.com/kimalive/pc-ble-driver-py/releases/download/v0.17.11/pc_ble_driver_py-0.17.11-cp38-abi3-macosx_26_0_arm64.whl
+Creating virtual environment...
+Installing wheel...
+Testing imports...
+Python: 3.8.18
+Platform: darwin
+✓ Imported pc_ble_driver_py
+  Version: 0.17.11
+  Location: /var/folders/7k/fyj0lxfn2bvf6kbp03bsr0980000gn/T/test_wheel_38_arm64_XXXXXX.4B7nDjTMpO/lib/python3.8/site-packages/pc_ble_driver_py/__init__.py
+✓ Imported nrf_ble_driver_sd_api_v5
+✓ Imported nrf_ble_driver_sd_api_v2
+✓ Imported BLEDriver (initialization skipped - hardware not available, expected)
+✓ Found 2 .so file(s) in lib/: ['_nrf_ble_driver_sd_api_v5.so', '_nrf_ble_driver_sd_api_v2.so']
+✓ Found 2 Python wrapper file(s) in lib/: ['nrf_ble_driver_sd_api_v5.py', 'nrf_ble_driver_sd_api_v2.py']
+
+✓ All tests passed!
+✓ Test passed for Python 3.8 (cp38) - arm64
+
+==================================================================================
+Testing: Python 3.9 (cp39) - arm64
+==================================================================================
+Using Python: .tox/py39/bin/python
+Python version: Python 3.9.21
+Wheel URL: https://github.com/kimalive/pc-ble-driver-py/releases/download/v0.17.11/pc_ble_driver_py-0.17.11-cp39-abi3-macosx_26_0_arm64.whl
+Creating virtual environment...
+Installing wheel...
+Testing imports...
+
+✗ Import tests failed: Test output did not show success
+
+==================================================================================
+Testing: Python 3.10 (cp310) - arm64
+==================================================================================
+Using Python: .tox/py310/bin/python
+Python version: Python 3.10.18
+Wheel URL: https://github.com/kimalive/pc-ble-driver-py/releases/download/v0.17.11/pc_ble_driver_py-0.17.11-cp310-abi3-macosx_26_0_arm64.whl
+Creating virtual environment...
+Installing wheel...
+Testing imports...
+
+✗ Import tests failed: Test output did not show success
+
+==================================================================================
+Testing: Python 3.11 (cp311) - arm64
+==================================================================================
+Using Python: .tox/py311/bin/python
+Python version: Python 3.11.13
+Wheel URL: https://github.com/kimalive/pc-ble-driver-py/releases/download/v0.17.11/pc_ble_driver_py-0.17.11-cp311-abi3-macosx_26_0_arm64.whl
+Creating virtual environment...
+Installing wheel...
+Testing imports...
+
+✗ Import tests failed: Test output did not show success
+
+==================================================================================
+Testing: Python 3.12 (cp312) - arm64
+==================================================================================
+Using Python: .tox/py312/bin/python
+Python version: Python 3.12.12
+Wheel URL: https://github.com/kimalive/pc-ble-driver-py/releases/download/v0.17.11/pc_ble_driver_py-0.17.11-cp312-abi3-macosx_26_0_arm64.whl
+Creating virtual environment...
+Installing wheel...
+Testing imports...
+
+✗ Import tests failed: Test output did not show success
+
+==================================================================================
+Testing: Python 3.13 (cp313) - arm64
+==================================================================================
+Using Python: .tox/py313/bin/python
+Python version: Python 3.13.7
+Wheel URL: https://github.com/kimalive/pc-ble-driver-py/releases/download/v0.17.11/pc_ble_driver_py-0.17.11-cp313-abi3-macosx_26_0_arm64.whl
+Creating virtual environment...
+Installing wheel...
+Testing imports...
+Traceback (most recent call last):
+  File "<string>", line 48, in <module>
+    import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5
+  File "/private/var/folders/7k/fyj0lxfn2bvf6kbp03bsr0980000gn/T/test_wheel_313_arm64_XXXXXX.UQqQsLMQHt/lib/python3.13/site-packages/pc_ble_driver_py/lib/nrf_ble_driver_sd_api_v5.py", line 10, in <module>
+    from . import _nrf_ble_driver_sd_api_v5
+SystemError: initialization of _nrf_ble_driver_sd_api_v5 did not return an extension module
+Python: 3.13.7
+Platform: darwin
+✓ Imported pc_ble_driver_py
+  Version: 0.17.11
+  Location: /private/var/folders/7k/fyj0lxfn2bvf6kbp03bsr0980000gn/T/test_wheel_313_arm64_XXXXXX.UQqQsLMQHt/lib/python3.13/site-packages/pc_ble_driver_py/__init__.py
+✗ Failed to import nrf_ble_driver_sd_api_v5: initialization of _nrf_ble_driver_sd_api_v5 did not return an extension module
+✗ Import tests failed (exit code: 0)
+
+==================================================================================
+Test Summary
+==================================================================================
+Release: v0.17.11
+Architecture: arm64
+
+Passed:  1
+Failed:  5
+Skipped: 0
+Total:   6
+
+Failed tests:
+  - Python 3.9 (cp39) - arm64 - test output did not show success
+  - Python 3.10 (cp310) - arm64 - test output did not show success
+  - Python 3.11 (cp311) - arm64 - test output did not show success
+  - Python 3.12 (cp312) - arm64 - test output did not show success
+  - Python 3.13 (cp313) - arm64 - import tests failed (exit code: 0)
+
+⚠️  Some tests passed, but some failed
