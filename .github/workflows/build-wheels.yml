@@ -36,7 +36,14 @@ jobs:
 
       - name: Install vcpkg
         run: |
-          git clone https://github.com/Microsoft/vcpkg.git
+          # Retry logic for network issues
+          for i in 1 2 3; do
+            if git clone https://github.com/Microsoft/vcpkg.git; then
+              break
+            fi
+            echo "Clone attempt $i failed, retrying in 5 seconds..."
+            sleep 5
+          done
           cd vcpkg
           ./bootstrap-vcpkg.sh
 
@@ -156,7 +163,14 @@ jobs:
 
       - name: Install vcpkg
         run: |
-          git clone https://github.com/Microsoft/vcpkg.git
+          # Retry logic for network issues
+          for i in 1 2 3; do
+            if git clone https://github.com/Microsoft/vcpkg.git; then
+              break
+            fi
+            echo "Clone attempt $i failed, retrying in 5 seconds..."
+            sleep 5
+          done
           cd vcpkg
           ./bootstrap-vcpkg.sh
 
