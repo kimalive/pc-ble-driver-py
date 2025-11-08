@@ -7,14 +7,14 @@ on:
         required: true
         type: string
       tag:
-        description: 'Git tag (e.g., v0.17.11)'
+        description: 'Git tag (e.g., v0.17.11) - must start with "v"'
         required: true
         type: string
   push:
     branches:
       - master
     tags:
-      - v*
+      - 'v*'
 env:
   VCPKG_ROOT: ${{ github.workspace }}/vcpkg
   CMAKE_TOOLCHAIN_FILE: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
@@ -72,12 +72,26 @@ jobs:
         run: |
           # Clean _skbuild to ensure fresh build (prevents cross-version contamination)
           rm -rf _skbuild || true
+          # Verify we're using the correct Python version
+          PYTHON_EXE=$(which python)
+          PYTHON_VER=$($PYTHON_EXE -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null)
+          EXPECTED_VER="${{ matrix.python-version }}"
+          if [ "$PYTHON_VER" != "$EXPECTED_VER" ]; then
+            echo "ERROR: Python version mismatch! Expected: $EXPECTED_VER, Got: $PYTHON_VER"
+            exit 1
+          fi
+          echo "✓ Verified Python version: $PYTHON_VER"
+          # Get absolute path to Python executable and root directory
+          PYTHON_EXE_ABS=$(cd "$(dirname "$PYTHON_EXE")" && pwd)/$(basename "$PYTHON_EXE")
+          PYTHON_ROOT_DIR=$(dirname "$(dirname "$PYTHON_EXE_ABS")")
           # Build wheel with explicit Python detection flags
-          python setup.py bdist_wheel --build-type Release -- \
+          # CRITICAL: Unset PYTHONPATH and adjust PATH to prevent interference
+          env -u PYTHONPATH PATH="$(dirname "$PYTHON_EXE_ABS"):$PATH" \
+            $PYTHON_EXE_ABS setup.py bdist_wheel --build-type Release -- \
             -DCMAKE_OSX_ARCHITECTURES=x86_64 \
-            -DPYTHON_EXECUTABLE="$(which python)" \
-            -DPython3_EXECUTABLE="$(which python)" \
-            -DPython3_ROOT_DIR="$(dirname $(dirname $(which python)))" \
+            -DPYTHON_EXECUTABLE="$PYTHON_EXE_ABS" \
+            -DPython3_EXECUTABLE="$PYTHON_EXE_ABS" \
+            -DPython3_ROOT_DIR="$PYTHON_ROOT_DIR" \
             -DPython3_FIND_STRATEGY=LOCATION \
             -DPython3_FIND_REGISTRY=NEVER \
             -DPython3_FIND_VIRTUALENV=ONLY \
@@ -199,12 +213,26 @@ jobs:
         run: |
           # Clean _skbuild to ensure fresh build (prevents cross-version contamination)
           rm -rf _skbuild || true
+          # Verify we're using the correct Python version
+          PYTHON_EXE=$(which python)
+          PYTHON_VER=$($PYTHON_EXE -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null)
+          EXPECTED_VER="${{ matrix.python-version }}"
+          if [ "$PYTHON_VER" != "$EXPECTED_VER" ]; then
+            echo "ERROR: Python version mismatch! Expected: $EXPECTED_VER, Got: $PYTHON_VER"
+            exit 1
+          fi
+          echo "✓ Verified Python version: $PYTHON_VER"
+          # Get absolute path to Python executable and root directory
+          PYTHON_EXE_ABS=$(cd "$(dirname "$PYTHON_EXE")" && pwd)/$(basename "$PYTHON_EXE")
+          PYTHON_ROOT_DIR=$(dirname "$(dirname "$PYTHON_EXE_ABS")")
           # Build wheel with explicit Python detection flags
-          python setup.py bdist_wheel --build-type Release -- \
+          # CRITICAL: Unset PYTHONPATH and adjust PATH to prevent interference
+          env -u PYTHONPATH PATH="$(dirname "$PYTHON_EXE_ABS"):$PATH" \
+            $PYTHON_EXE_ABS setup.py bdist_wheel --build-type Release -- \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
-            -DPYTHON_EXECUTABLE="$(which python)" \
-            -DPython3_EXECUTABLE="$(which python)" \
-            -DPython3_ROOT_DIR="$(dirname $(dirname $(which python)))" \
+            -DPYTHON_EXECUTABLE="$PYTHON_EXE_ABS" \
+            -DPython3_EXECUTABLE="$PYTHON_EXE_ABS" \
+            -DPython3_ROOT_DIR="$PYTHON_ROOT_DIR" \
             -DPython3_FIND_STRATEGY=LOCATION \
             -DPython3_FIND_REGISTRY=NEVER \
             -DPython3_FIND_VIRTUALENV=ONLY \
@@ -281,6 +309,16 @@ jobs:
     permissions:
       contents: write  # Required to create/delete releases
     steps:
+      - name: Validate tag format
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "ERROR: Tag must be in format 'vX.Y.Z' (e.g., v0.17.11)"
+            echo "Received: $TAG"
+            exit 1
+          fi
+          echo "✓ Tag format valid: $TAG"
+      
       - name: Checkout code
         uses: actions/checkout@v4
         with:

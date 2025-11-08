@@ -5,6 +5,7 @@
 # Don't exit on error - continue testing other versions
 set +e
 
+# Use v-prefixed tag format (e.g., v0.17.11)
 RELEASE_TAG="v0.17.11"
 RELEASE_VERSION="0.17.11"
 ARCH="arm64"
