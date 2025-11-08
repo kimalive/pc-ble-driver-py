@@ -153,6 +153,49 @@ jobs:
             python ${{ github.workspace }}/bundle_into_wheel.py "$WHEEL" || echo "Bundling skipped (optional)"
           fi
 
+      - name: Test wheel after build
+        if: success()
+        env:
+          VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+          DYLD_LIBRARY_PATH: ${{ github.workspace }}/vcpkg/installed/x64-osx/lib
+        run: |
+          # Find the wheel that was just built
+          PYTHON_TAG="cp${{ matrix.python-version }}"
+          PYTHON_TAG=$(echo "$PYTHON_TAG" | sed 's/\.//g')
+          WHEEL=$(ls -t dist/pc_ble_driver_py-*-${PYTHON_TAG}-abi3-*x86_64*.whl 2>/dev/null | head -1)
+          if [ -z "$WHEEL" ]; then
+            WHEEL=$(ls -t dist/pc_ble_driver_py-*-*x86_64*.whl 2>/dev/null | head -1)
+          fi
+          if [ -n "$WHEEL" ] && [ -f "$WHEEL" ]; then
+            echo "Testing wheel: $(basename $WHEEL)"
+            # Create temporary venv and test the wheel
+            TEMP_VENV=$(mktemp -d)
+            python -m venv "$TEMP_VENV"
+            source "$TEMP_VENV/bin/activate"
+            pip install --quiet --no-deps "$WHEEL"
+            # Test imports with DYLD_LIBRARY_PATH set
+            python -c "
+import sys
+# Remove project source from path to ensure we use installed wheel
+sys.path = [p for p in sys.path if 'pc-ble-driver-py' not in p or 'site-packages' in p]
+import pc_ble_driver_py
+print('✓ Imported pc_ble_driver_py')
+import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5
+print('✓ Imported nrf_ble_driver_sd_api_v5')
+print('✓ Wheel test passed')
+" || {
+              echo "✗ Wheel test FAILED - wheel will not be uploaded"
+              deactivate
+              rm -rf "$TEMP_VENV"
+              exit 1
+            }
+            deactivate
+            rm -rf "$TEMP_VENV"
+            echo "✓ Wheel test passed"
+          else
+            echo "⚠️  No wheel found to test"
+          fi
+
       - name: Upload x86_64 wheel
         uses: actions/upload-artifact@v4
         with:
@@ -292,6 +335,49 @@ jobs:
           fi
           if [ -n "$WHEEL" ] && [ -f "$WHEEL" ]; then
             python ${{ github.workspace }}/bundle_into_wheel.py "$WHEEL" || echo "Bundling skipped (optional)"
+          fi
+
+      - name: Test wheel after build
+        if: success()
+        env:
+          VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+          DYLD_LIBRARY_PATH: ${{ github.workspace }}/vcpkg/installed/arm64-osx/lib
+        run: |
+          # Find the wheel that was just built
+          PYTHON_TAG="cp${{ matrix.python-version }}"
+          PYTHON_TAG=$(echo "$PYTHON_TAG" | sed 's/\.//g')
+          WHEEL=$(ls -t dist/pc_ble_driver_py-*-${PYTHON_TAG}-abi3-*arm64*.whl 2>/dev/null | head -1)
+          if [ -z "$WHEEL" ]; then
+            WHEEL=$(ls -t dist/pc_ble_driver_py-*-*arm64*.whl 2>/dev/null | head -1)
+          fi
+          if [ -n "$WHEEL" ] && [ -f "$WHEEL" ]; then
+            echo "Testing wheel: $(basename $WHEEL)"
+            # Create temporary venv and test the wheel
+            TEMP_VENV=$(mktemp -d)
+            python -m venv "$TEMP_VENV"
+            source "$TEMP_VENV/bin/activate"
+            pip install --quiet --no-deps "$WHEEL"
+            # Test imports with DYLD_LIBRARY_PATH set
+            python -c "
+import sys
+# Remove project source from path to ensure we use installed wheel
+sys.path = [p for p in sys.path if 'pc-ble-driver-py' not in p or 'site-packages' in p]
+import pc_ble_driver_py
+print('✓ Imported pc_ble_driver_py')
+import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5
+print('✓ Imported nrf_ble_driver_sd_api_v5')
+print('✓ Wheel test passed')
+" || {
+              echo "✗ Wheel test FAILED - wheel will not be uploaded"
+              deactivate
+              rm -rf "$TEMP_VENV"
+              exit 1
+            }
+            deactivate
+            rm -rf "$TEMP_VENV"
+            echo "✓ Wheel test passed"
+          else
+            echo "⚠️  No wheel found to test"
           fi
 
       - name: Upload ARM64 wheel
