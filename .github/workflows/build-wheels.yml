@@ -82,52 +82,14 @@ jobs:
           PYTHON_ROOT_DIR=$(dirname "$(dirname "$PYTHON_EXE_ABS")")
           # CRITICAL: Verify Python library can be found and is correct
           # In GitHub Actions, Python is installed to hostedtoolcache, not a framework
-          # Check multiple possible locations for the Python library
-          PYTHON_LIB=$($PYTHON_EXE_ABS -c "
-import sysconfig
-import os
-import sys
-
-# Try multiple methods to find the Python library
-libdir = sysconfig.get_config_var('LIBDIR')
-libfile = sysconfig.get_config_var('LIBRARY')
-
-# Method 1: Standard library path
-if libfile:
-    libpath = os.path.join(libdir, libfile)
-    if os.path.exists(libpath):
-        print(libpath)
-        sys.exit(0)
-
-# Method 2: Check in Python's base directory
-base_lib = os.path.join(sys.base_prefix, 'lib', libfile if libfile else 'libpython{}.{}.a'.format(sys.version_info.major, sys.version_info.minor))
-if os.path.exists(base_lib):
-    print(base_lib)
-    sys.exit(0)
-
-# Method 3: Check for shared library (.dylib on macOS)
-dylib_name = 'libpython{}.{}.dylib'.format(sys.version_info.major, sys.version_info.minor)
-dylib_path = os.path.join(libdir, dylib_name)
-if os.path.exists(dylib_path):
-    print(dylib_path)
-    sys.exit(0)
-
-# Method 4: Check in base prefix for dylib
-base_dylib = os.path.join(sys.base_prefix, 'lib', dylib_name)
-if os.path.exists(base_dylib):
-    print(base_dylib)
-    sys.exit(0)
-
-# If nothing found, print the expected path for reference
-print(os.path.join(libdir, libfile) if libfile else libdir)
-" 2>/dev/null)
-          
+          # This is expected and CMake will find the library using Python3_ROOT_DIR
+          PYTHON_LIB=$($PYTHON_EXE_ABS -c "import sysconfig; libdir = sysconfig.get_config_var('LIBDIR'); libfile = sysconfig.get_config_var('LIBRARY'); libpath = f'{libdir}/{libfile}' if libfile else libdir; print(libpath)" 2>/dev/null)
           if [ -n "$PYTHON_LIB" ] && [ -f "$PYTHON_LIB" ]; then
             echo "✓ Found Python library: $PYTHON_LIB"
           else
             echo "ℹ️  Info: Python library not found at expected path: $PYTHON_LIB"
             echo "   This is normal for GitHub Actions Python installations (hostedtoolcache)"
-            echo "   CMake will find the correct library using Python3_ROOT_DIR"
+            echo "   CMake will find the correct library using Python3_ROOT_DIR: $PYTHON_ROOT_DIR"
             echo "   Continuing with build..."
           fi
           
@@ -480,52 +442,14 @@ print(os.path.join(libdir, libfile) if libfile else libdir)
           
           # CRITICAL: Verify Python library can be found and is correct
           # In GitHub Actions, Python is installed to hostedtoolcache, not a framework
-          # Check multiple possible locations for the Python library
-          PYTHON_LIB=$($PYTHON_EXE_ABS -c "
-import sysconfig
-import os
-import sys
-
-# Try multiple methods to find the Python library
-libdir = sysconfig.get_config_var('LIBDIR')
-libfile = sysconfig.get_config_var('LIBRARY')
-
-# Method 1: Standard library path
-if libfile:
-    libpath = os.path.join(libdir, libfile)
-    if os.path.exists(libpath):
-        print(libpath)
-        sys.exit(0)
-
-# Method 2: Check in Python's base directory
-base_lib = os.path.join(sys.base_prefix, 'lib', libfile if libfile else 'libpython{}.{}.a'.format(sys.version_info.major, sys.version_info.minor))
-if os.path.exists(base_lib):
-    print(base_lib)
-    sys.exit(0)
-
-# Method 3: Check for shared library (.dylib on macOS)
-dylib_name = 'libpython{}.{}.dylib'.format(sys.version_info.major, sys.version_info.minor)
-dylib_path = os.path.join(libdir, dylib_name)
-if os.path.exists(dylib_path):
-    print(dylib_path)
-    sys.exit(0)
-
-# Method 4: Check in base prefix for dylib
-base_dylib = os.path.join(sys.base_prefix, 'lib', dylib_name)
-if os.path.exists(base_dylib):
-    print(base_dylib)
-    sys.exit(0)
-
-# If nothing found, print the expected path for reference
-print(os.path.join(libdir, libfile) if libfile else libdir)
-" 2>/dev/null)
-          
+          # This is expected and CMake will find the library using Python3_ROOT_DIR
+          PYTHON_LIB=$($PYTHON_EXE_ABS -c "import sysconfig; libdir = sysconfig.get_config_var('LIBDIR'); libfile = sysconfig.get_config_var('LIBRARY'); libpath = f'{libdir}/{libfile}' if libfile else libdir; print(libpath)" 2>/dev/null)
           if [ -n "$PYTHON_LIB" ] && [ -f "$PYTHON_LIB" ]; then
             echo "✓ Found Python library: $PYTHON_LIB"
           else
             echo "ℹ️  Info: Python library not found at expected path: $PYTHON_LIB"
             echo "   This is normal for GitHub Actions Python installations (hostedtoolcache)"
-            echo "   CMake will find the correct library using Python3_ROOT_DIR"
+            echo "   CMake will find the correct library using Python3_ROOT_DIR: $PYTHON_ROOT_DIR"
             echo "   Continuing with build..."
           fi
           
