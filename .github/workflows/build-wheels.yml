@@ -67,6 +67,7 @@ jobs:
           MACOSX_DEPLOYMENT_TARGET: 11.0
           # Ensure scikit-build has a valid platform name at import time
           _SKBUILD_PLAT_NAME: macosx-15.7-x86_64
+          SKBUILD_PLAT_NAME: macosx-15.7-x86_64
         run: |
           # Clean _skbuild to ensure fresh build (prevents cross-version contamination)
           rm -rf _skbuild || true
@@ -137,6 +138,8 @@ jobs:
           # Capture wheels before build to identify the new one
           WHEELS_BEFORE=$(ls -1 dist/*.whl 2>/dev/null | wc -l || echo "0")
           echo "Wheels in dist/ before build: $WHEELS_BEFORE"
+          # Show what Python sees for env vars
+          $PYTHON_EXE_ABS -c 'import os; print(\"PY _SKBUILD_PLAT_NAME:\", os.environ.get(\"_SKBUILD_PLAT_NAME\")); print(\"PY SKBUILD_PLAT_NAME:\", os.environ.get(\"SKBUILD_PLAT_NAME\"))'
           
           # (Removed inline scikit-build patch; relying on pinned scikit-build version)
           
@@ -436,6 +439,7 @@ jobs:
           # This must be set as an environment variable, not in the script
           # GitHub Actions uses macOS 15.7, so we use macosx-15.7-arm64
           _SKBUILD_PLAT_NAME: macosx-15.7-arm64
+          SKBUILD_PLAT_NAME: macosx-15.7-arm64
         run: |
           # Clean _skbuild to ensure fresh build (prevents cross-version contamination)
           rm -rf _skbuild || true
@@ -507,6 +511,8 @@ jobs:
           # Capture wheels before build to identify the new one
           WHEELS_BEFORE=$(ls -1 dist/*.whl 2>/dev/null | wc -l || echo "0")
           echo "Wheels in dist/ before build: $WHEELS_BEFORE"
+          # Show what Python sees for env vars
+          $PYTHON_EXE_ABS -c 'import os; print(\"PY _SKBUILD_PLAT_NAME:\", os.environ.get(\"_SKBUILD_PLAT_NAME\")); print(\"PY SKBUILD_PLAT_NAME:\", os.environ.get(\"SKBUILD_PLAT_NAME\"))'
           
           # (Removed inline scikit-build patch; relying on pinned scikit-build version)
           

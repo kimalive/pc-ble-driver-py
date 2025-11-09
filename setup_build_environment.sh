@@ -72,7 +72,7 @@ fi
 echo ""
 echo "=== Installing Python Build Dependencies ==="
 python -m pip install --upgrade pip
-pip install --upgrade \
+python -m pip install --upgrade \
     "scikit-build>=0.18.0" \
     "ninja>=1.10.0" \
     "cmake>=3.20.0" \
