@@ -202,14 +202,34 @@ try:
             # Find the function and wrap it
             if '_default_skbuild_plat_name' in constants_code:
                 # Create a patched version that handles the error
-                patched_constants_code = constants_code.replace(
+                # Try multiple possible variations of the problematic line
+                problematic_patterns = [
                     'major_macos, minor_macos = release.split(".")[:2]',
-                    '''# Patched by setup.py to handle single-digit macOS releases
+                    "major_macos, minor_macos = release.split('.')[:2]",
+                    'major_macos, minor_macos = release.split(".")[:2]  #',
+                    "major_macos, minor_macos = release.split('.')[:2]  #",
+                ]
+                
+                patched_constants_code = constants_code
+                replacement_applied = False
+                
+                for pattern in problematic_patterns:
+                    if pattern in patched_constants_code:
+                        patched_constants_code = patched_constants_code.replace(
+                            pattern,
+                            '''# Patched by setup.py to handle single-digit macOS releases
 parts = release.split(".")
 if len(parts) < 2:
     release = f"{parts[0]}.0" if parts else "15.0"
 major_macos, minor_macos = release.split(".")[:2]'''
-                )
+                        )
+                        replacement_applied = True
+                        print(f"DEBUG setup.py: Patched pattern: {pattern[:50]}...", file=sys.stderr)
+                        break
+                
+                if not replacement_applied:
+                    print("DEBUG setup.py: WARNING: Could not find problematic line pattern in constants.py", file=sys.stderr)
+                    print("DEBUG setup.py: Will attempt to patch at function level instead", file=sys.stderr)
                 
                 # Execute the patched code in a new module
                 constants_module = types.ModuleType('skbuild.constants')
