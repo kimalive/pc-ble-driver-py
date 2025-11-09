@@ -142,7 +142,13 @@ jobs:
           # CRITICAL: Export _SKBUILD_PLAT_NAME so Python/scikit-build can read it
           # This must be exported in the shell environment, not just set as a variable
           export _SKBUILD_PLAT_NAME
-          if ! env -u PYTHONPATH PATH="$(dirname "$PYTHON_EXE_ABS"):$PATH" MACOSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET _SKBUILD_PLAT_NAME=$_SKBUILD_PLAT_NAME \
+          echo "DEBUG: _SKBUILD_PLAT_NAME before build: $_SKBUILD_PLAT_NAME"
+          # Verify the variable is set
+          if [ -z "$_SKBUILD_PLAT_NAME" ]; then
+            echo "ERROR: _SKBUILD_PLAT_NAME is not set!"
+            exit 1
+          fi
+          if ! env -u PYTHONPATH PATH="$(dirname "$PYTHON_EXE_ABS"):$PATH" MACOSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET _SKBUILD_PLAT_NAME="$_SKBUILD_PLAT_NAME" \
             $PYTHON_EXE_ABS setup.py bdist_wheel --build-type Release -- \
             -DCMAKE_OSX_ARCHITECTURES=x86_64 \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET \
@@ -493,7 +499,13 @@ jobs:
           # CRITICAL: Export _SKBUILD_PLAT_NAME so Python/scikit-build can read it
           # This must be exported in the shell environment, not just set as a variable
           export _SKBUILD_PLAT_NAME
-          if ! env -u PYTHONPATH PATH="$(dirname "$PYTHON_EXE_ABS"):$PATH" MACOSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET _SKBUILD_PLAT_NAME=$_SKBUILD_PLAT_NAME \
+          echo "DEBUG: _SKBUILD_PLAT_NAME before build: $_SKBUILD_PLAT_NAME"
+          # Verify the variable is set
+          if [ -z "$_SKBUILD_PLAT_NAME" ]; then
+            echo "ERROR: _SKBUILD_PLAT_NAME is not set!"
+            exit 1
+          fi
+          if ! env -u PYTHONPATH PATH="$(dirname "$PYTHON_EXE_ABS"):$PATH" MACOSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET _SKBUILD_PLAT_NAME="$_SKBUILD_PLAT_NAME" \
             $PYTHON_EXE_ABS setup.py bdist_wheel --build-type Release -- \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET \
