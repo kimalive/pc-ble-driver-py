@@ -151,7 +151,15 @@ jobs:
             echo "ERROR: _SKBUILD_PLAT_NAME is not set!"
             exit 1
           fi
-          if ! env -u PYTHONPATH PATH="$(dirname "$PYTHON_EXE_ABS"):$PATH" MACOSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET _SKBUILD_PLAT_NAME="$_SKBUILD_PLAT_NAME" \
+          # CRITICAL: The env command creates a NEW environment
+          # We must explicitly pass ALL environment variables we need
+          # Including _SKBUILD_PLAT_NAME which scikit-build checks at import time
+          if ! env -u PYTHONPATH PATH="$(dirname "$PYTHON_EXE_ABS"):$PATH" \
+            MACOSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET \
+            _SKBUILD_PLAT_NAME="$_SKBUILD_PLAT_NAME" \
+            VCPKG_ROOT="$VCPKG_ROOT" \
+            CMAKE_TOOLCHAIN_FILE="$CMAKE_TOOLCHAIN_FILE" \
+            CMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH" \
             $PYTHON_EXE_ABS setup.py bdist_wheel --build-type Release -- \
             -DCMAKE_OSX_ARCHITECTURES=x86_64 \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET \
