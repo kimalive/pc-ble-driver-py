@@ -30,6 +30,20 @@ echo "=== CMake Info ==="
 cmake --version || echo "⚠️  cmake not found"
 echo ""
 
+# Check build_wheels.sh for MACOSX_DEPLOYMENT_TARGET setting
+echo "=== Build Configuration (from build_wheels.sh) ==="
+if [ -f "build_wheels.sh" ]; then
+    BUILD_DEPLOYMENT_TARGET=$(grep -E "^export MACOSX_DEPLOYMENT_TARGET=" build_wheels.sh | sed 's/.*=//' | tr -d '"' | tr -d "'")
+    if [ -n "$BUILD_DEPLOYMENT_TARGET" ]; then
+        echo "MACOSX_DEPLOYMENT_TARGET set in build_wheels.sh: $BUILD_DEPLOYMENT_TARGET"
+    else
+        echo "MACOSX_DEPLOYMENT_TARGET: not set in build_wheels.sh (should be 11.0)"
+    fi
+else
+    echo "build_wheels.sh not found"
+fi
+echo ""
+
 # Function to find Python executable (same as build_wheels.sh)
 find_python() {
     local version=$1
@@ -146,10 +160,14 @@ else:
     echo "CMAKE_TOOLCHAIN_FILE: ${CMAKE_TOOLCHAIN_FILE:-not set}"
     echo "CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH:-not set}"
     echo "DYLD_LIBRARY_PATH: ${DYLD_LIBRARY_PATH:-not set}"
-    echo "MACOSX_DEPLOYMENT_TARGET: ${MACOSX_DEPLOYMENT_TARGET:-not set}"
+    echo "MACOSX_DEPLOYMENT_TARGET (build-time): ${MACOSX_DEPLOYMENT_TARGET:-not set (should be 11.0 for consistency)}"
     echo "CFLAGS: ${CFLAGS:-not set}"
     echo "CXXFLAGS: ${CXXFLAGS:-not set}"
     echo "LDFLAGS: ${LDFLAGS:-not set}"
+    echo ""
+    echo "NOTE: Python's built-in MACOSX_DEPLOYMENT_TARGET (above) is what Python was built with."
+    echo "      The build-time MACOSX_DEPLOYMENT_TARGET (from environment) is what we use during compilation."
+    echo "      build_wheels.sh sets MACOSX_DEPLOYMENT_TARGET=11.0 to ensure consistency."
     echo ""
     
     # Check if we have a built wheel for this version
