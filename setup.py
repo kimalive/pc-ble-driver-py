@@ -38,6 +38,8 @@ import sys
 import re
 import codecs
 import os
+import importlib.util
+import types
 
 # CRITICAL: Set _SKBUILD_PLAT_NAME before importing scikit-build
 # This fixes the ValueError when scikit-build tries to parse macOS version
@@ -169,24 +171,66 @@ if sys.platform == "darwin":
 # scikit-build's constants.py calls _default_skbuild_plat_name() which uses platform.release()
 # Our patch ensures platform.release() returns a parseable value
 #
-# Wrap the import in a try-except to catch the ValueError and retry with a more aggressive patch
+# However, scikit-build imports platform in its own module context, so we need to patch
+# the actual function that scikit-build will call. We'll use an import hook to intercept
+# scikit-build's constants module and patch _default_skbuild_plat_name() directly.
+
+# First, try to import and patch scikit-build's constants module before it executes
+try:
+    # Import the constants module's parent to get access to it
+    import importlib
+    import types
+    
+    # Try to load skbuild.constants and patch _default_skbuild_plat_name before it runs
+    # We need to do this carefully because the module executes at import time
+    skbuild_spec = importlib.util.find_spec('skbuild')
+    if skbuild_spec and skbuild_spec.submodule_search_locations:
+        # We found skbuild, now try to patch constants before it's imported
+        constants_path = None
+        for location in skbuild_spec.submodule_search_locations:
+            potential_path = os.path.join(location, 'constants.py')
+            if os.path.exists(potential_path):
+                constants_path = potential_path
+                break
+        
+        if constants_path:
+            # Read the constants.py file and patch it in memory
+            with open(constants_path, 'r') as f:
+                constants_code = f.read()
+            
+            # Patch the _default_skbuild_plat_name function to handle single-digit releases
+            # Find the function and wrap it
+            if '_default_skbuild_plat_name' in constants_code:
+                # Create a patched version that handles the error
+                patched_constants_code = constants_code.replace(
+                    'major_macos, minor_macos = release.split(".")[:2]',
+                    '''# Patched by setup.py to handle single-digit macOS releases
+parts = release.split(".")
+if len(parts) < 2:
+    release = f"{parts[0]}.0" if parts else "15.0"
+major_macos, minor_macos = release.split(".")[:2]'''
+                )
+                
+                # Execute the patched code in a new module
+                constants_module = types.ModuleType('skbuild.constants')
+                exec(compile(patched_constants_code, constants_path, 'exec'), constants_module.__dict__)
+                sys.modules['skbuild.constants'] = constants_module
+                print("DEBUG setup.py: Patched skbuild.constants module in memory", file=sys.stderr)
+except Exception as e:
+    print(f"DEBUG setup.py: Could not patch skbuild.constants directly: {e}", file=sys.stderr)
+    # Fall back to normal import
+
+# Now try to import scikit-build
 try:
     from skbuild import setup
 except ValueError as e:
     if "not enough values to unpack" in str(e):
-        # The patch didn't work, scikit-build must be importing platform differently
-        # Try a more aggressive approach: patch it right before the import
-        print("DEBUG setup.py: First import attempt failed with ValueError, trying aggressive patch", file=sys.stderr)
-        import importlib
-        # Force reload platform module to ensure our patch is active
-        if 'platform' in sys.modules:
-            importlib.reload(sys.modules['platform'])
-            sys.modules['platform'].release = globals().get('_patched_release_func', lambda: "15.0")
-        # Also ensure it's in the current namespace
-        import platform
-        platform.release = globals().get('_patched_release_func', lambda: "15.0")
-        print(f"DEBUG setup.py: After aggressive patch, platform.release() = {platform.release()!r}", file=sys.stderr)
-        # Try again
+        # The patch didn't work, try one more time with a different approach
+        print("DEBUG setup.py: Import still failed, trying final fallback", file=sys.stderr)
+        # Force set the environment variable that scikit-build should check
+        # (even though it doesn't seem to check it, maybe a newer version does)
+        os.environ['_SKBUILD_PLAT_NAME'] = 'macosx-15.0-arm64' if platform.machine() == 'arm64' else 'macosx-15.0-x86_64'
+        # Try importing again
         from skbuild import setup
     else:
         raise
