@@ -107,10 +107,15 @@ if sys.platform == "darwin":
     # which uses platform.release(). On newer macOS, platform.release() returns "15" (no dot),
     # causing ValueError: not enough values to unpack (expected 2, got 1)
     # We must monkey-patch platform.release() BEFORE any scikit-build imports
-    import platform as platform_module
+    # 
+    # The issue: scikit-build does: release = platform.release(); major, minor = release.split(".")[:2]
+    # If release is "15" (no dot), split(".") returns ["15"], causing the ValueError
+    # Solution: Patch platform.release() to always return a value with at least one dot
+    
+    import platform
     
     # Store the original function
-    original_release = platform_module.release
+    original_release = platform.release
     
     def patched_release():
         """Return a safe macOS version string that scikit-build can parse"""
@@ -136,17 +141,19 @@ if sys.platform == "darwin":
             print(f"DEBUG setup.py: platform.release() error: {e}, using fallback", file=sys.stderr)
             return "15.0"
     
-    # CRITICAL: Patch it BEFORE importing scikit-build
+    # CRITICAL: Patch it in the platform module BEFORE importing scikit-build
     # This must happen before any scikit-build code runs
-    platform_module.release = patched_release
+    platform.release = patched_release
     
     # Verify the patch works
-    test_release = platform_module.release()
+    test_release = platform.release()
     print(f"DEBUG setup.py: Patched platform.release() = {test_release!r}", file=sys.stderr)
     
-    # Also patch platform.release at module level (some imports might cache it)
-    import platform
-    platform.release = patched_release
+    # CRITICAL: Also patch it in sys.modules['platform'] to ensure all imports see it
+    # This is necessary because Python caches module imports
+    if 'platform' in sys.modules:
+        sys.modules['platform'].release = patched_release
+        print(f"DEBUG setup.py: Also patched sys.modules['platform'].release", file=sys.stderr)
 
 # CRITICAL: Import scikit-build AFTER setting _SKBUILD_PLAT_NAME and patching platform.release()
 # scikit-build's constants.py calls _default_skbuild_plat_name() which uses platform.release()
