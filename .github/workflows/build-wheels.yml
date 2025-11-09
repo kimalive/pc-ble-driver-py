@@ -14,7 +14,7 @@ on:
     branches:
       - master
     tags:
-      - v*
+      - 'v*'
 env:
   VCPKG_ROOT: ${{ github.workspace }}/vcpkg
   CMAKE_TOOLCHAIN_FILE: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
