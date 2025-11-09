@@ -592,6 +592,15 @@ jobs:
             echo "⚠️  No wheel found to test"
           fi
 
+      - name: Upload build logs (ARM64)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-arm64-py${{ matrix.python-version }}
+          path: /tmp/build_wheel_*.log
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Upload ARM64 wheel
         uses: actions/upload-artifact@v4
         with:
