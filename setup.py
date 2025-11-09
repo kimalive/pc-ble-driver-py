@@ -39,6 +39,20 @@ import re
 import codecs
 import os
 
+# CRITICAL: Set _SKBUILD_PLAT_NAME before importing scikit-build
+# This fixes the ValueError when scikit-build tries to parse macOS version
+# scikit-build expects platform.release() to return "X.Y" but newer macOS returns "X"
+if sys.platform == "darwin" and "_SKBUILD_PLAT_NAME" not in os.environ:
+    import platform
+    macos_version = platform.mac_ver()[0]  # e.g., "15.7.1"
+    if macos_version:
+        major, minor = macos_version.split(".")[:2]
+        arch = platform.machine()  # e.g., "arm64" or "x86_64"
+        if arch == "arm64":
+            os.environ["_SKBUILD_PLAT_NAME"] = f"macosx-{major}.{minor}-arm64"
+        else:
+            os.environ["_SKBUILD_PLAT_NAME"] = f"macosx-{major}.{minor}-x86_64"
+
 from skbuild import setup
 from setuptools import find_packages
 
