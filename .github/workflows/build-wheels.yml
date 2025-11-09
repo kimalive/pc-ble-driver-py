@@ -189,7 +189,9 @@ jobs:
               rm -rf "$TEMP_INSTALL_DIR"
               exit 1
             }
-            # Add extracted wheel directory to PYTHONPATH for testing
+            # Wheels extract with package directories at the root
+            # PYTHONPATH should point to the directory containing pc_ble_driver_py
+            # The extracted wheel has pc_ble_driver_py/ at the root of TEMP_INSTALL_DIR
             export PYTHONPATH="$TEMP_INSTALL_DIR:$PYTHONPATH"
             cd - > /dev/null
             # Test imports with DYLD_LIBRARY_PATH set
@@ -199,7 +201,7 @@ jobs:
             else
               TIMEOUT_CMD=""
             fi
-            $TIMEOUT_CMD python -c 'import sys; import os; sys.path = [p for p in sys.path if "pc-ble-driver-py" not in p or "site-packages" in p or "tmp" in p]; import pc_ble_driver_py; print("✓ Imported pc_ble_driver_py"); import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5; print("✓ Imported nrf_ble_driver_sd_api_v5"); print("✓ Wheel test passed")' 2>&1
+            $TIMEOUT_CMD python -c 'import sys; import os; TEMP_DIR = os.environ.get("PYTHONPATH", "").split(":")[0] if os.environ.get("PYTHONPATH") else ""; if TEMP_DIR: sys.path.insert(0, TEMP_DIR); sys.path = [p for p in sys.path if p and (TEMP_DIR in p or "site-packages" in p)]; import pc_ble_driver_py; print("✓ Imported pc_ble_driver_py"); import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5; print("✓ Imported nrf_ble_driver_sd_api_v5"); print("✓ Wheel test passed")' 2>&1
             TEST_EXIT=$?
             # Clean up temp install directory
             rm -rf "$TEMP_INSTALL_DIR" 2>/dev/null || true
@@ -396,7 +398,9 @@ jobs:
               rm -rf "$TEMP_INSTALL_DIR"
               exit 1
             }
-            # Add extracted wheel directory to PYTHONPATH for testing
+            # Wheels extract with package directories at the root
+            # PYTHONPATH should point to the directory containing pc_ble_driver_py
+            # The extracted wheel has pc_ble_driver_py/ at the root of TEMP_INSTALL_DIR
             export PYTHONPATH="$TEMP_INSTALL_DIR:$PYTHONPATH"
             cd - > /dev/null
             # Test imports with DYLD_LIBRARY_PATH set
@@ -406,7 +410,7 @@ jobs:
             else
               TIMEOUT_CMD=""
             fi
-            $TIMEOUT_CMD python -c 'import sys; import os; sys.path = [p for p in sys.path if "pc-ble-driver-py" not in p or "site-packages" in p or "tmp" in p]; import pc_ble_driver_py; print("✓ Imported pc_ble_driver_py"); import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5; print("✓ Imported nrf_ble_driver_sd_api_v5"); print("✓ Wheel test passed")' 2>&1
+            $TIMEOUT_CMD python -c 'import sys; import os; TEMP_DIR = os.environ.get("PYTHONPATH", "").split(":")[0] if os.environ.get("PYTHONPATH") else ""; if TEMP_DIR: sys.path.insert(0, TEMP_DIR); sys.path = [p for p in sys.path if p and (TEMP_DIR in p or "site-packages" in p)]; import pc_ble_driver_py; print("✓ Imported pc_ble_driver_py"); import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5; print("✓ Imported nrf_ble_driver_sd_api_v5"); print("✓ Wheel test passed")' 2>&1
             TEST_EXIT=$?
             # Clean up temp install directory
             rm -rf "$TEMP_INSTALL_DIR" 2>/dev/null || true
