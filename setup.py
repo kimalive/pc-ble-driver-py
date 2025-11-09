@@ -43,35 +43,53 @@ import os
 # This fixes the ValueError when scikit-build tries to parse macOS version
 # scikit-build expects platform.release() to return "X.Y" but newer macOS returns "X"
 # We MUST set this before any scikit-build imports, as it's checked at module import time
-# Always set it (don't check if already set) to ensure it's available when scikit-build imports
+# scikit-build checks os.environ.get('_SKBUILD_PLAT_NAME') in constants.py at import time
 if sys.platform == "darwin":
-    import platform
-    try:
-        # Try to get macOS version from platform.mac_ver() (most reliable)
-        macos_version = platform.mac_ver()[0]  # e.g., "15.7.1" or "15.7"
-        if macos_version:
-            parts = macos_version.split(".")
-            major = parts[0] if len(parts) > 0 else "15"
-            minor = parts[1] if len(parts) > 1 else "0"
-        else:
-            # Fallback if mac_ver() returns empty
+    # Only set if not already set (allow environment variable to override)
+    if "_SKBUILD_PLAT_NAME" not in os.environ:
+        import platform
+        try:
+            # Try to get macOS version from platform.mac_ver() (most reliable)
+            macos_version = platform.mac_ver()[0]  # e.g., "15.7.1" or "15.7"
+            if macos_version:
+                parts = macos_version.split(".")
+                major = parts[0] if len(parts) > 0 else "15"
+                minor = parts[1] if len(parts) > 1 else "0"
+            else:
+                # Fallback if mac_ver() returns empty
+                major, minor = "15", "0"
+        except Exception:
+            # Fallback if platform.mac_ver() fails
             major, minor = "15", "0"
-    except Exception:
-        # Fallback if platform.mac_ver() fails
-        major, minor = "15", "0"
+        
+        # Get architecture
+        try:
+            arch = platform.machine()  # e.g., "arm64" or "x86_64"
+        except Exception:
+            arch = "arm64"  # Default to arm64 for macOS
+        
+        # Set the environment variable
+        if arch == "arm64":
+            os.environ["_SKBUILD_PLAT_NAME"] = f"macosx-{major}.{minor}-arm64"
+        else:
+            os.environ["_SKBUILD_PLAT_NAME"] = f"macosx-{major}.{minor}-x86_64"
     
-    # Get architecture
-    try:
-        arch = platform.machine()  # e.g., "arm64" or "x86_64"
-    except Exception:
-        arch = "arm64"  # Default to arm64 for macOS
+    # CRITICAL: Verify it's set before importing scikit-build
+    # This ensures scikit-build will find it when it checks os.environ.get()
+    if "_SKBUILD_PLAT_NAME" not in os.environ:
+        # Last resort fallback
+        import platform
+        arch = platform.machine() if hasattr(platform, 'machine') else "arm64"
+        if arch == "arm64":
+            os.environ["_SKBUILD_PLAT_NAME"] = "macosx-15.0-arm64"
+        else:
+            os.environ["_SKBUILD_PLAT_NAME"] = "macosx-15.0-x86_64"
     
-    # Always set the environment variable (overwrite if already set to ensure it's correct)
-    if arch == "arm64":
-        os.environ["_SKBUILD_PLAT_NAME"] = f"macosx-{major}.{minor}-arm64"
-    else:
-        os.environ["_SKBUILD_PLAT_NAME"] = f"macosx-{major}.{minor}-x86_64"
+    # DEBUG: Print the value to verify it's set (remove in production if needed)
+    print(f"DEBUG setup.py: _SKBUILD_PLAT_NAME = {os.environ.get('_SKBUILD_PLAT_NAME', 'NOT SET')}", file=sys.stderr)
 
+# CRITICAL: Import scikit-build AFTER setting _SKBUILD_PLAT_NAME
+# scikit-build checks os.environ.get('_SKBUILD_PLAT_NAME') in constants.py at import time
 from skbuild import setup
 from setuptools import find_packages
 
