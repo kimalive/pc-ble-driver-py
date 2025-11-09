@@ -46,6 +46,15 @@ if sys.platform == "darwin":
         arch = platform.machine()
         arch = "arm64" if arch == "arm64" else "x86_64"
         os.environ["SKBUILD_PLAT_NAME"] = f"macosx-11.0-{arch}"
+    # Patch platform.release() to return X.Y (some macOS return only X)
+    try:
+        _orig_release = platform.release
+        def _safe_release():
+            rel = _orig_release()
+            return rel if "." in rel else f"{rel}.0"
+        platform.release = _safe_release
+    except Exception:
+        pass
 
 from skbuild import setup
 from setuptools import find_packages
