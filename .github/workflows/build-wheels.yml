@@ -201,7 +201,7 @@ jobs:
             else
               TIMEOUT_CMD=""
             fi
-            $TIMEOUT_CMD python -c 'import sys; import os; TEMP_DIR = os.environ.get("PYTHONPATH", "").split(":")[0] if os.environ.get("PYTHONPATH") else ""; if TEMP_DIR: sys.path.insert(0, TEMP_DIR); sys.path = [p for p in sys.path if p and (TEMP_DIR in p or "site-packages" in p)]; import pc_ble_driver_py; print("✓ Imported pc_ble_driver_py"); import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5; print("✓ Imported nrf_ble_driver_sd_api_v5"); print("✓ Wheel test passed")' 2>&1
+            $TIMEOUT_CMD python -c 'import sys; import os; TEMP_DIR = os.environ.get("PYTHONPATH", "").split(":")[0] if os.environ.get("PYTHONPATH") else ""; [sys.path.insert(0, TEMP_DIR) for _ in [None] if TEMP_DIR]; sys.path = [p for p in sys.path if p and (TEMP_DIR in p or "site-packages" in p)]; import pc_ble_driver_py; print("✓ Imported pc_ble_driver_py"); import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5; print("✓ Imported nrf_ble_driver_sd_api_v5"); print("✓ Wheel test passed")' 2>&1
             TEST_EXIT=$?
             # Clean up temp install directory
             rm -rf "$TEMP_INSTALL_DIR" 2>/dev/null || true
@@ -410,7 +410,7 @@ jobs:
             else
               TIMEOUT_CMD=""
             fi
-            $TIMEOUT_CMD python -c 'import sys; import os; TEMP_DIR = os.environ.get("PYTHONPATH", "").split(":")[0] if os.environ.get("PYTHONPATH") else ""; if TEMP_DIR: sys.path.insert(0, TEMP_DIR); sys.path = [p for p in sys.path if p and (TEMP_DIR in p or "site-packages" in p)]; import pc_ble_driver_py; print("✓ Imported pc_ble_driver_py"); import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5; print("✓ Imported nrf_ble_driver_sd_api_v5"); print("✓ Wheel test passed")' 2>&1
+            $TIMEOUT_CMD python -c 'import sys; import os; TEMP_DIR = os.environ.get("PYTHONPATH", "").split(":")[0] if os.environ.get("PYTHONPATH") else ""; [sys.path.insert(0, TEMP_DIR) for _ in [None] if TEMP_DIR]; sys.path = [p for p in sys.path if p and (TEMP_DIR in p or "site-packages" in p)]; import pc_ble_driver_py; print("✓ Imported pc_ble_driver_py"); import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5; print("✓ Imported nrf_ble_driver_sd_api_v5"); print("✓ Wheel test passed")' 2>&1
             TEST_EXIT=$?
             # Clean up temp install directory
             rm -rf "$TEMP_INSTALL_DIR" 2>/dev/null || true
