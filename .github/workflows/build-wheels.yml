@@ -1,5 +1,4 @@
 name: Build Wheels and Release
-
 on:
   workflow_dispatch:
     inputs:
