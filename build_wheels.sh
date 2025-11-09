@@ -8,8 +8,24 @@ set +e
 export VCPKG_ROOT=/Users/kbalive/Devel/OpenSource/vcpkg
 export CMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
 
+# CRITICAL: Get version from __init__.py (same as setup.py does)
+# This ensures we always use the correct version, not a hardcoded one
+PACKAGE_VERSION=$(python3 -c "import sys; sys.path.insert(0, '.'); from pc_ble_driver_py import __version__; print(__version__)" 2>/dev/null)
+if [ -z "$PACKAGE_VERSION" ]; then
+    # Fallback: try to extract from __init__.py directly
+    if [ -f "pc_ble_driver_py/__init__.py" ]; then
+        PACKAGE_VERSION=$(grep -E "^__version__\s*=" pc_ble_driver_py/__init__.py | sed -E "s/.*['\"]([^'\"]+)['\"].*/\1/")
+    fi
+fi
+if [ -z "$PACKAGE_VERSION" ]; then
+    echo "✗ ERROR: Could not determine package version"
+    echo "   Make sure pc_ble_driver_py/__init__.py contains __version__ = \"X.Y.Z\""
+    exit 1
+fi
+
 echo "=================================================================================="
 echo "Building wheels for all Python versions"
+echo "Package version: ${PACKAGE_VERSION}"
 echo "=================================================================================="
 echo ""
 
@@ -146,11 +162,11 @@ build_arm64_wheel() {
     # This prevents any Python version from overwriting another's wheel
     if [ -n "$wheel" ] && [ -f "$wheel" ]; then
         local python_tag="cp${python_version//./}"
-        local base_name=$(basename "$wheel" .whl)
-        local final_name="dist/${base_name%-cp38-abi3*}-${python_tag}-abi3-macosx_26_0_arm64.whl"
+        # Use PACKAGE_VERSION for final name (not extracted from base_name which might have wrong version)
+        local final_name="dist/pc_ble_driver_py-${PACKAGE_VERSION}-${python_tag}-abi3-macosx_26_0_arm64.whl"
         
         # Create unique temp name that includes Python version to prevent overwriting
-        local unique_temp_name="dist/pc_ble_driver_py-0.17.10-${python_tag}-abi3-macosx_26_0_arm64.tmp.$(date +%s).$$.whl"
+        local unique_temp_name="dist/pc_ble_driver_py-${PACKAGE_VERSION}-${python_tag}-abi3-macosx_26_0_arm64.tmp.$(date +%s).$$.whl"
         mv "$wheel" "$unique_temp_name" 2>/dev/null || true
         wheel="$unique_temp_name"
         
@@ -238,10 +254,10 @@ build_x86_64_wheel() {
         
         if [ -n "$wheel" ] && [ -f "$wheel" ]; then
             local python_tag="cp${python_version//./}"
-            local final_name="dist/pc_ble_driver_py-0.17.10-${python_tag}-abi3-macosx_26_0_x86_64.whl"
+            local final_name="dist/pc_ble_driver_py-${PACKAGE_VERSION}-${python_tag}-abi3-macosx_26_0_x86_64.whl"
             
             # Create unique temp name
-            local unique_temp_name="dist/pc_ble_driver_py-0.17.10-${python_tag}-abi3-macosx_26_0_x86_64.tmp.$(date +%s).$$.whl"
+            local unique_temp_name="dist/pc_ble_driver_py-${PACKAGE_VERSION}-${python_tag}-abi3-macosx_26_0_x86_64.tmp.$(date +%s).$$.whl"
             mv "$wheel" "$unique_temp_name" 2>/dev/null || true
             wheel="$unique_temp_name"
             
@@ -340,7 +356,7 @@ for temp_wheel in dist/*.tmp.*.whl; do
         if [[ "$temp_wheel" =~ cp([0-9]+)-abi3 ]]; then
             python_tag="${BASH_REMATCH[0]}"
             final_name="${temp_wheel%.tmp.*.whl}.whl"
-            final_name="dist/pc_ble_driver_py-0.17.10-${python_tag}-abi3-macosx_26_0_arm64.whl"
+            final_name="dist/pc_ble_driver_py-${PACKAGE_VERSION}-${python_tag}-abi3-macosx_26_0_arm64.whl"
             mv "$temp_wheel" "$final_name" 2>/dev/null && echo "  ✓ Renamed: $(basename "$temp_wheel") -> $(basename "$final_name")" || true
         fi
     fi

@@ -84,8 +84,19 @@ jobs:
           # Get absolute path to Python executable and root directory
           PYTHON_EXE_ABS=$(cd "$(dirname "$PYTHON_EXE")" && pwd)/$(basename "$PYTHON_EXE")
           PYTHON_ROOT_DIR=$(dirname "$(dirname "$PYTHON_EXE_ABS")")
+          # CRITICAL: Verify Python library can be found and is correct
+          # This ensures we're using the same Python installation method as local builds
+          PYTHON_LIB=$($PYTHON_EXE_ABS -c "import sysconfig; libdir = sysconfig.get_config_var('LIBDIR'); libfile = sysconfig.get_config_var('LIBRARY'); libpath = f'{libdir}/{libfile}' if libfile else libdir; print(libpath)" 2>/dev/null)
+          if [ -n "$PYTHON_LIB" ] && [ -f "$PYTHON_LIB" ]; then
+            echo "✓ Found Python library: $PYTHON_LIB"
+          else
+            echo "⚠️  Warning: Could not find Python library at expected path: $PYTHON_LIB"
+            echo "   This may cause build issues. Continuing anyway..."
+          fi
+          
           # Build wheel with explicit Python detection flags
           # CRITICAL: Unset PYTHONPATH and adjust PATH to prevent interference
+          # CRITICAL: Also ensure we're using the same build environment as local
           env -u PYTHONPATH PATH="$(dirname "$PYTHON_EXE_ABS"):$PATH" \
             $PYTHON_EXE_ABS setup.py bdist_wheel --build-type Release -- \
             -DCMAKE_OSX_ARCHITECTURES=x86_64 \
@@ -174,8 +185,15 @@ jobs:
             source "$TEMP_VENV/bin/activate"
             pip install --quiet --no-deps "$WHEEL"
             # Test imports with DYLD_LIBRARY_PATH set
-            python -c "
+            # Use timeout to catch segfaults (exit code 139)
+            if command -v timeout >/dev/null 2>&1; then
+              TIMEOUT_CMD="timeout 30"
+            else
+              TIMEOUT_CMD=""
+            fi
+            $TIMEOUT_CMD python -c "
 import sys
+import os
 # Remove project source from path to ensure we use installed wheel
 sys.path = [p for p in sys.path if 'pc-ble-driver-py' not in p or 'site-packages' in p]
 import pc_ble_driver_py
@@ -183,15 +201,25 @@ print('✓ Imported pc_ble_driver_py')
 import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5
 print('✓ Imported nrf_ble_driver_sd_api_v5')
 print('✓ Wheel test passed')
-" || {
-              echo "✗ Wheel test FAILED - wheel will not be uploaded"
+" 2>&1
+            TEST_EXIT=$?
+            if [ $TEST_EXIT -eq 0 ]; then
+              echo "✓ Wheel test passed"
+            elif [ $TEST_EXIT -eq 139 ]; then
+              echo "✗ Wheel test FAILED - SEGFAULT (exit code: 139)"
+              echo "  This wheel will not be uploaded"
               deactivate
               rm -rf "$TEMP_VENV"
               exit 1
-            }
+            else
+              echo "✗ Wheel test FAILED (exit code: $TEST_EXIT)"
+              echo "  This wheel will not be uploaded"
+              deactivate
+              rm -rf "$TEMP_VENV"
+              exit 1
+            fi
             deactivate
             rm -rf "$TEMP_VENV"
-            echo "✓ Wheel test passed"
           else
             echo "⚠️  No wheel found to test"
           fi
@@ -268,8 +296,20 @@ print('✓ Wheel test passed')
           # Get absolute path to Python executable and root directory
           PYTHON_EXE_ABS=$(cd "$(dirname "$PYTHON_EXE")" && pwd)/$(basename "$PYTHON_EXE")
           PYTHON_ROOT_DIR=$(dirname "$(dirname "$PYTHON_EXE_ABS")")
+          
+          # CRITICAL: Verify Python library can be found and is correct
+          # This ensures we're using the same Python installation method as local builds
+          PYTHON_LIB=$($PYTHON_EXE_ABS -c "import sysconfig; libdir = sysconfig.get_config_var('LIBDIR'); libfile = sysconfig.get_config_var('LIBRARY'); libpath = f'{libdir}/{libfile}' if libfile else libdir; print(libpath)" 2>/dev/null)
+          if [ -n "$PYTHON_LIB" ] && [ -f "$PYTHON_LIB" ]; then
+            echo "✓ Found Python library: $PYTHON_LIB"
+          else
+            echo "⚠️  Warning: Could not find Python library at expected path: $PYTHON_LIB"
+            echo "   This may cause build issues. Continuing anyway..."
+          fi
+          
           # Build wheel with explicit Python detection flags
           # CRITICAL: Unset PYTHONPATH and adjust PATH to prevent interference
+          # CRITICAL: Also ensure we're using the same build environment as local
           env -u PYTHONPATH PATH="$(dirname "$PYTHON_EXE_ABS"):$PATH" \
             $PYTHON_EXE_ABS setup.py bdist_wheel --build-type Release -- \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
@@ -358,8 +398,15 @@ print('✓ Wheel test passed')
             source "$TEMP_VENV/bin/activate"
             pip install --quiet --no-deps "$WHEEL"
             # Test imports with DYLD_LIBRARY_PATH set
-            python -c "
+            # Use timeout to catch segfaults (exit code 139)
+            if command -v timeout >/dev/null 2>&1; then
+              TIMEOUT_CMD="timeout 30"
+            else
+              TIMEOUT_CMD=""
+            fi
+            $TIMEOUT_CMD python -c "
 import sys
+import os
 # Remove project source from path to ensure we use installed wheel
 sys.path = [p for p in sys.path if 'pc-ble-driver-py' not in p or 'site-packages' in p]
 import pc_ble_driver_py
@@ -367,15 +414,25 @@ print('✓ Imported pc_ble_driver_py')
 import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5
 print('✓ Imported nrf_ble_driver_sd_api_v5')
 print('✓ Wheel test passed')
-" || {
-              echo "✗ Wheel test FAILED - wheel will not be uploaded"
+" 2>&1
+            TEST_EXIT=$?
+            if [ $TEST_EXIT -eq 0 ]; then
+              echo "✓ Wheel test passed"
+            elif [ $TEST_EXIT -eq 139 ]; then
+              echo "✗ Wheel test FAILED - SEGFAULT (exit code: 139)"
+              echo "  This wheel will not be uploaded"
               deactivate
               rm -rf "$TEMP_VENV"
               exit 1
-            }
+            else
+              echo "✗ Wheel test FAILED (exit code: $TEST_EXIT)"
+              echo "  This wheel will not be uploaded"
+              deactivate
+              rm -rf "$TEMP_VENV"
+              exit 1
+            fi
             deactivate
             rm -rf "$TEMP_VENV"
-            echo "✓ Wheel test passed"
           else
             echo "⚠️  No wheel found to test"
           fi
