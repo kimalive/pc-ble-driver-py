@@ -65,6 +65,8 @@ jobs:
           CMAKE_TOOLCHAIN_FILE: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
           CMAKE_PREFIX_PATH: ${{ github.workspace }}/vcpkg/installed/x64-osx
           MACOSX_DEPLOYMENT_TARGET: 11.0
+          # Ensure scikit-build has a valid platform name at import time
+          _SKBUILD_PLAT_NAME: macosx-15.7-x86_64
         run: |
           # Clean _skbuild to ensure fresh build (prevents cross-version contamination)
           rm -rf _skbuild || true
