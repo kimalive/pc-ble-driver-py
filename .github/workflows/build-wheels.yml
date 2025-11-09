@@ -179,13 +179,17 @@ jobs:
           fi
           if [ -n "$WHEEL" ] && [ -f "$WHEEL" ]; then
             echo "Testing wheel: $(basename $WHEEL)"
-            # Create temporary venv and test the wheel
-            TEMP_VENV=$(mktemp -d)
-            python -m venv "$TEMP_VENV"
-            source "$TEMP_VENV/bin/activate"
-            # Use absolute path and force install to bypass platform compatibility check
+            # Use the same Python that built the wheel to test it
+            # Get absolute path to wheel
             WHEEL_ABS=$(cd "$(dirname "$WHEEL")" && pwd)/$(basename "$WHEEL")
-            pip install --quiet --no-deps --force-reinstall --no-build-isolation "$WHEEL_ABS" || pip install --quiet --no-deps --force-reinstall "$WHEEL_ABS"
+            # Install wheel to a temporary directory to bypass platform compatibility check
+            TEMP_INSTALL_DIR=$(mktemp -d)
+            python -m pip install --quiet --no-deps --target "$TEMP_INSTALL_DIR" "$WHEEL_ABS" 2>&1 || {
+              echo "⚠️  Direct install failed, trying with --force-reinstall"
+              python -m pip install --quiet --no-deps --force-reinstall --target "$TEMP_INSTALL_DIR" "$WHEEL_ABS" 2>&1
+            }
+            # Add temp install dir to PYTHONPATH for testing
+            export PYTHONPATH="$TEMP_INSTALL_DIR:$PYTHONPATH"
             # Test imports with DYLD_LIBRARY_PATH set
             # Use timeout to catch segfaults (exit code 139)
             if command -v timeout >/dev/null 2>&1; then
@@ -193,25 +197,21 @@ jobs:
             else
               TIMEOUT_CMD=""
             fi
-            $TIMEOUT_CMD python -c 'import sys; import os; sys.path = [p for p in sys.path if "pc-ble-driver-py" not in p or "site-packages" in p]; import pc_ble_driver_py; print("✓ Imported pc_ble_driver_py"); import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5; print("✓ Imported nrf_ble_driver_sd_api_v5"); print("✓ Wheel test passed")' 2>&1
+            $TIMEOUT_CMD python -c 'import sys; import os; sys.path = [p for p in sys.path if "pc-ble-driver-py" not in p or "site-packages" in p or "tmp" in p]; import pc_ble_driver_py; print("✓ Imported pc_ble_driver_py"); import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5; print("✓ Imported nrf_ble_driver_sd_api_v5"); print("✓ Wheel test passed")' 2>&1
             TEST_EXIT=$?
+            # Clean up temp install directory
+            rm -rf "$TEMP_INSTALL_DIR" 2>/dev/null || true
             if [ $TEST_EXIT -eq 0 ]; then
               echo "✓ Wheel test passed"
             elif [ $TEST_EXIT -eq 139 ]; then
               echo "✗ Wheel test FAILED - SEGFAULT (exit code: 139)"
               echo "  This wheel will not be uploaded"
-              deactivate
-              rm -rf "$TEMP_VENV"
               exit 1
             else
               echo "✗ Wheel test FAILED (exit code: $TEST_EXIT)"
               echo "  This wheel will not be uploaded"
-              deactivate
-              rm -rf "$TEMP_VENV"
               exit 1
             fi
-            deactivate
-            rm -rf "$TEMP_VENV"
           else
             echo "⚠️  No wheel found to test"
           fi
@@ -384,13 +384,17 @@ jobs:
           fi
           if [ -n "$WHEEL" ] && [ -f "$WHEEL" ]; then
             echo "Testing wheel: $(basename $WHEEL)"
-            # Create temporary venv and test the wheel
-            TEMP_VENV=$(mktemp -d)
-            python -m venv "$TEMP_VENV"
-            source "$TEMP_VENV/bin/activate"
-            # Use absolute path and force install to bypass platform compatibility check
+            # Use the same Python that built the wheel to test it
+            # Get absolute path to wheel
             WHEEL_ABS=$(cd "$(dirname "$WHEEL")" && pwd)/$(basename "$WHEEL")
-            pip install --quiet --no-deps --force-reinstall --no-build-isolation "$WHEEL_ABS" || pip install --quiet --no-deps --force-reinstall "$WHEEL_ABS"
+            # Install wheel to a temporary directory to bypass platform compatibility check
+            TEMP_INSTALL_DIR=$(mktemp -d)
+            python -m pip install --quiet --no-deps --target "$TEMP_INSTALL_DIR" "$WHEEL_ABS" 2>&1 || {
+              echo "⚠️  Direct install failed, trying with --force-reinstall"
+              python -m pip install --quiet --no-deps --force-reinstall --target "$TEMP_INSTALL_DIR" "$WHEEL_ABS" 2>&1
+            }
+            # Add temp install dir to PYTHONPATH for testing
+            export PYTHONPATH="$TEMP_INSTALL_DIR:$PYTHONPATH"
             # Test imports with DYLD_LIBRARY_PATH set
             # Use timeout to catch segfaults (exit code 139)
             if command -v timeout >/dev/null 2>&1; then
@@ -398,25 +402,21 @@ jobs:
             else
               TIMEOUT_CMD=""
             fi
-            $TIMEOUT_CMD python -c 'import sys; import os; sys.path = [p for p in sys.path if "pc-ble-driver-py" not in p or "site-packages" in p]; import pc_ble_driver_py; print("✓ Imported pc_ble_driver_py"); import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5; print("✓ Imported nrf_ble_driver_sd_api_v5"); print("✓ Wheel test passed")' 2>&1
+            $TIMEOUT_CMD python -c 'import sys; import os; sys.path = [p for p in sys.path if "pc-ble-driver-py" not in p or "site-packages" in p or "tmp" in p]; import pc_ble_driver_py; print("✓ Imported pc_ble_driver_py"); import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5; print("✓ Imported nrf_ble_driver_sd_api_v5"); print("✓ Wheel test passed")' 2>&1
             TEST_EXIT=$?
+            # Clean up temp install directory
+            rm -rf "$TEMP_INSTALL_DIR" 2>/dev/null || true
             if [ $TEST_EXIT -eq 0 ]; then
               echo "✓ Wheel test passed"
             elif [ $TEST_EXIT -eq 139 ]; then
               echo "✗ Wheel test FAILED - SEGFAULT (exit code: 139)"
               echo "  This wheel will not be uploaded"
-              deactivate
-              rm -rf "$TEMP_VENV"
               exit 1
             else
               echo "✗ Wheel test FAILED (exit code: $TEST_EXIT)"
               echo "  This wheel will not be uploaded"
-              deactivate
-              rm -rf "$TEMP_VENV"
               exit 1
             fi
-            deactivate
-            rm -rf "$TEMP_VENV"
           else
             echo "⚠️  No wheel found to test"
           fi
