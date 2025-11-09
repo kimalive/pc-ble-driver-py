@@ -104,36 +104,49 @@ if sys.platform == "darwin":
         print(f"DEBUG setup.py: EMERGENCY FALLBACK - set _SKBUILD_PLAT_NAME = {fallback}", file=sys.stderr)
     
     # CRITICAL: scikit-build's constants.py calls _default_skbuild_plat_name() directly
-    # without checking os.environ first. We must monkey-patch the function before import.
-    # Import the constants module early and patch the function
-    import importlib.util
-    import types
-    
-    # Get the final platform name
-    final_plat_name = os.environ.get('_SKBUILD_PLAT_NAME', 'macosx-15.0-arm64')
-    
-    # Monkey-patch platform.release() to return a value that won't cause the error
-    # This is a workaround for scikit-build's bug
+    # which uses platform.release(). On newer macOS, platform.release() returns "15" (no dot),
+    # causing ValueError: not enough values to unpack (expected 2, got 1)
+    # We must monkey-patch platform.release() BEFORE any scikit-build imports
     import platform as platform_module
+    
+    # Store the original function
     original_release = platform_module.release
     
     def patched_release():
         """Return a safe macOS version string that scikit-build can parse"""
         try:
-            # Try to get actual release
+            # Get the actual release value
             release = original_release()
-            # If it has a dot, return it
-            if '.' in release:
+            # scikit-build expects "X.Y" format, so ensure we have at least one dot
+            if not release:
+                return "15.0"
+            # Split by dot to check format
+            parts = release.split(".")
+            if len(parts) >= 2:
+                # Already has major.minor, return as-is
                 return release
-            # Otherwise, append .0 to make it parseable
-            return f"{release}.0"
-        except Exception:
-            # Fallback
+            elif len(parts) == 1:
+                # Only major version (e.g., "15"), append ".0"
+                return f"{parts[0]}.0"
+            else:
+                # Empty or weird, use fallback
+                return "15.0"
+        except Exception as e:
+            # Fallback on any error
+            print(f"DEBUG setup.py: platform.release() error: {e}, using fallback", file=sys.stderr)
             return "15.0"
     
-    # Patch platform.release() before importing scikit-build
+    # CRITICAL: Patch it BEFORE importing scikit-build
+    # This must happen before any scikit-build code runs
     platform_module.release = patched_release
-    print(f"DEBUG setup.py: Patched platform.release() to return safe value", file=sys.stderr)
+    
+    # Verify the patch works
+    test_release = platform_module.release()
+    print(f"DEBUG setup.py: Patched platform.release() = {test_release!r}", file=sys.stderr)
+    
+    # Also patch platform.release at module level (some imports might cache it)
+    import platform
+    platform.release = patched_release
 
 # CRITICAL: Import scikit-build AFTER setting _SKBUILD_PLAT_NAME and patching platform.release()
 # scikit-build's constants.py calls _default_skbuild_plat_name() which uses platform.release()
