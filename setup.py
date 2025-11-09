@@ -229,13 +229,35 @@ major_macos, minor_macos = release.split(".")[:2]'''
                 
                 if not replacement_applied:
                     print("DEBUG setup.py: WARNING: Could not find problematic line pattern in constants.py", file=sys.stderr)
-                    print("DEBUG setup.py: Will attempt to patch at function level instead", file=sys.stderr)
+                    print("DEBUG setup.py: Searching for alternative patterns...", file=sys.stderr)
+                    # Try to find the line with regex or different whitespace
+                    import re
+                    # Look for the pattern with flexible whitespace
+                    pattern = r'major_macos,\s+minor_macos\s*=\s*release\.split\([^)]+\)\[:2\]'
+                    if re.search(pattern, constants_code):
+                        print("DEBUG setup.py: Found pattern with regex, patching...", file=sys.stderr)
+                        def replacer(match):
+                            return '''# Patched by setup.py to handle single-digit macOS releases
+parts = release.split(".")
+if len(parts) < 2:
+    release = f"{parts[0]}.0" if parts else "15.0"
+major_macos, minor_macos = release.split(".")[:2]'''
+                        patched_constants_code = re.sub(pattern, replacer, constants_code)
+                        replacement_applied = True
                 
-                # Execute the patched code in a new module
-                constants_module = types.ModuleType('skbuild.constants')
-                exec(compile(patched_constants_code, constants_path, 'exec'), constants_module.__dict__)
-                sys.modules['skbuild.constants'] = constants_module
-                print("DEBUG setup.py: Patched skbuild.constants module in memory", file=sys.stderr)
+                if replacement_applied:
+                    # Execute the patched code in a new module
+                    # CRITICAL: Insert into sys.modules BEFORE any skbuild imports
+                    constants_module = types.ModuleType('skbuild.constants')
+                    try:
+                        exec(compile(patched_constants_code, constants_path, 'exec'), constants_module.__dict__)
+                        sys.modules['skbuild.constants'] = constants_module
+                        print("DEBUG setup.py: ✓ Patched skbuild.constants module in memory", file=sys.stderr)
+                    except Exception as exec_error:
+                        print(f"DEBUG setup.py: ✗ Failed to execute patched constants.py: {exec_error}", file=sys.stderr)
+                        print("DEBUG setup.py: Will fall back to normal import", file=sys.stderr)
+                else:
+                    print("DEBUG setup.py: ✗ Could not patch constants.py, will try normal import", file=sys.stderr)
 except Exception as e:
     print(f"DEBUG setup.py: Could not patch skbuild.constants directly: {e}", file=sys.stderr)
     # Fall back to normal import
