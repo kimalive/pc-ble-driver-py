@@ -8,6 +8,11 @@ set +e
 export VCPKG_ROOT=/Users/kbalive/Devel/OpenSource/vcpkg
 export CMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
 
+# CRITICAL: Set consistent MACOSX_DEPLOYMENT_TARGET for all builds
+# Use macOS 11.0 (Big Sur) as minimum for maximum compatibility
+# This ensures all wheels are built with the same deployment target
+export MACOSX_DEPLOYMENT_TARGET=11.0
+
 # CRITICAL: Get version from __init__.py (same as setup.py does)
 # This ensures we always use the correct version, not a hardcoded one
 PACKAGE_VERSION=$(python3 -c "import sys; sys.path.insert(0, '.'); from pc_ble_driver_py import __version__; print(__version__)" 2>/dev/null)
@@ -117,8 +122,9 @@ build_arm64_wheel() {
     # CRITICAL: Unset PYTHONPATH and ensure PATH doesn't interfere with Python detection
     # Also explicitly set Python3_ROOT_DIR to the Python executable's directory
     local python_root_dir=$(dirname "$(dirname "$python_exe_abs")")
-    if ! env -u PYTHONPATH PATH="$(dirname "$python_exe_abs"):$PATH" $python_exe setup.py bdist_wheel --build-type Release -- \
+    if ! env -u PYTHONPATH PATH="$(dirname "$python_exe_abs"):$PATH" MACOSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET $python_exe setup.py bdist_wheel --build-type Release -- \
         -DCMAKE_OSX_ARCHITECTURES=arm64 \
+        -DCMAKE_OSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET \
         -DPYTHON_EXECUTABLE="$python_exe_abs" \
         -DPython3_EXECUTABLE="$python_exe_abs" \
         -DPython3_ROOT_DIR="$python_root_dir" \
@@ -214,14 +220,14 @@ build_x86_64_wheel() {
     # CRITICAL: Pass PYTHON_EXECUTABLE to CMake to ensure it uses the correct Python version
     local build_succeeded=0
     if command -v arch &> /dev/null; then
-        if arch -x86_64 $python_exe setup.py bdist_wheel --build-type Release -- -DCMAKE_OSX_ARCHITECTURES=x86_64 -DPYTHON_EXECUTABLE="$python_exe_abs" 2>&1 | tail -5; then
+        if arch -x86_64 env MACOSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET $python_exe setup.py bdist_wheel --build-type Release -- -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_OSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET -DPYTHON_EXECUTABLE="$python_exe_abs" 2>&1 | tail -5; then
             build_succeeded=1
         else
             echo "⚠️  Failed to build x86_64 wheel (may need Intel Python)"
             return 1
         fi
     else
-        if $python_exe setup.py bdist_wheel --build-type Release -- -DCMAKE_OSX_ARCHITECTURES=x86_64 -DPYTHON_EXECUTABLE="$python_exe_abs" 2>&1 | tail -5; then
+        if env MACOSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET $python_exe setup.py bdist_wheel --build-type Release -- -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_OSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET -DPYTHON_EXECUTABLE="$python_exe_abs" 2>&1 | tail -5; then
             build_succeeded=1
         else
             echo "⚠️  Failed to build x86_64 wheel"

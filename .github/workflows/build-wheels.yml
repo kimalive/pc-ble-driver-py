@@ -69,6 +69,7 @@ jobs:
           VCPKG_ROOT: ${{ github.workspace }}/vcpkg
           CMAKE_TOOLCHAIN_FILE: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
           CMAKE_PREFIX_PATH: ${{ github.workspace }}/vcpkg/installed/x64-osx
+          MACOSX_DEPLOYMENT_TARGET: 11.0
         run: |
           # Clean _skbuild to ensure fresh build (prevents cross-version contamination)
           rm -rf _skbuild || true
@@ -133,9 +134,10 @@ jobs:
           echo ""
           echo "=== Building wheel ==="
           BUILD_LOG="/tmp/build_wheel_${PYTHON_VER//./}.log"
-          env -u PYTHONPATH PATH="$(dirname "$PYTHON_EXE_ABS"):$PATH" \
+          env -u PYTHONPATH PATH="$(dirname "$PYTHON_EXE_ABS"):$PATH" MACOSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET \
             $PYTHON_EXE_ABS setup.py bdist_wheel --build-type Release -- \
             -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET \
             -DPYTHON_EXECUTABLE="$PYTHON_EXE_ABS" \
             -DPython3_EXECUTABLE="$PYTHON_EXE_ABS" \
             -DPython3_ROOT_DIR="$PYTHON_ROOT_DIR" \
@@ -363,6 +365,7 @@ jobs:
           VCPKG_ROOT: ${{ github.workspace }}/vcpkg
           CMAKE_TOOLCHAIN_FILE: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
           CMAKE_PREFIX_PATH: ${{ github.workspace }}/vcpkg/installed/arm64-osx
+          MACOSX_DEPLOYMENT_TARGET: 11.0
         run: |
           # Clean _skbuild to ensure fresh build (prevents cross-version contamination)
           rm -rf _skbuild || true
@@ -428,9 +431,10 @@ jobs:
           echo ""
           echo "=== Building wheel ==="
           BUILD_LOG="/tmp/build_wheel_${PYTHON_VER//./}.log"
-          env -u PYTHONPATH PATH="$(dirname "$PYTHON_EXE_ABS"):$PATH" \
+          env -u PYTHONPATH PATH="$(dirname "$PYTHON_EXE_ABS"):$PATH" MACOSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET \
             $PYTHON_EXE_ABS setup.py bdist_wheel --build-type Release -- \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET \
             -DPYTHON_EXECUTABLE="$PYTHON_EXE_ABS" \
             -DPython3_EXECUTABLE="$PYTHON_EXE_ABS" \
             -DPython3_ROOT_DIR="$PYTHON_ROOT_DIR" \
