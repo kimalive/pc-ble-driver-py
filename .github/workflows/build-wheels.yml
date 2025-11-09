@@ -179,17 +179,19 @@ jobs:
           fi
           if [ -n "$WHEEL" ] && [ -f "$WHEEL" ]; then
             echo "Testing wheel: $(basename $WHEEL)"
-            # Use the same Python that built the wheel to test it
             # Get absolute path to wheel
             WHEEL_ABS=$(cd "$(dirname "$WHEEL")" && pwd)/$(basename "$WHEEL")
-            # Install wheel to a temporary directory to bypass platform compatibility check
+            # Extract wheel manually (it's just a zip file) to bypass pip's platform check
             TEMP_INSTALL_DIR=$(mktemp -d)
-            python -m pip install --quiet --no-deps --target "$TEMP_INSTALL_DIR" "$WHEEL_ABS" 2>&1 || {
-              echo "⚠️  Direct install failed, trying with --force-reinstall"
-              python -m pip install --quiet --no-deps --force-reinstall --target "$TEMP_INSTALL_DIR" "$WHEEL_ABS" 2>&1
+            cd "$TEMP_INSTALL_DIR"
+            unzip -q "$WHEEL_ABS" 2>/dev/null || {
+              echo "✗ Failed to extract wheel"
+              rm -rf "$TEMP_INSTALL_DIR"
+              exit 1
             }
-            # Add temp install dir to PYTHONPATH for testing
+            # Add extracted wheel directory to PYTHONPATH for testing
             export PYTHONPATH="$TEMP_INSTALL_DIR:$PYTHONPATH"
+            cd - > /dev/null
             # Test imports with DYLD_LIBRARY_PATH set
             # Use timeout to catch segfaults (exit code 139)
             if command -v timeout >/dev/null 2>&1; then
@@ -384,17 +386,19 @@ jobs:
           fi
           if [ -n "$WHEEL" ] && [ -f "$WHEEL" ]; then
             echo "Testing wheel: $(basename $WHEEL)"
-            # Use the same Python that built the wheel to test it
             # Get absolute path to wheel
             WHEEL_ABS=$(cd "$(dirname "$WHEEL")" && pwd)/$(basename "$WHEEL")
-            # Install wheel to a temporary directory to bypass platform compatibility check
+            # Extract wheel manually (it's just a zip file) to bypass pip's platform check
             TEMP_INSTALL_DIR=$(mktemp -d)
-            python -m pip install --quiet --no-deps --target "$TEMP_INSTALL_DIR" "$WHEEL_ABS" 2>&1 || {
-              echo "⚠️  Direct install failed, trying with --force-reinstall"
-              python -m pip install --quiet --no-deps --force-reinstall --target "$TEMP_INSTALL_DIR" "$WHEEL_ABS" 2>&1
+            cd "$TEMP_INSTALL_DIR"
+            unzip -q "$WHEEL_ABS" 2>/dev/null || {
+              echo "✗ Failed to extract wheel"
+              rm -rf "$TEMP_INSTALL_DIR"
+              exit 1
             }
-            # Add temp install dir to PYTHONPATH for testing
+            # Add extracted wheel directory to PYTHONPATH for testing
             export PYTHONPATH="$TEMP_INSTALL_DIR:$PYTHONPATH"
+            cd - > /dev/null
             # Test imports with DYLD_LIBRARY_PATH set
             # Use timeout to catch segfaults (exit code 139)
             if command -v timeout >/dev/null 2>&1; then
