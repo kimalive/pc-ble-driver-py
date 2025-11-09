@@ -161,11 +161,35 @@ if sys.platform == "darwin":
     test_release = platform.release()
     print(f"DEBUG setup.py: Patched platform.release() = {test_release!r}", file=sys.stderr)
     print(f"DEBUG setup.py: sys.modules['platform'].release = {sys.modules['platform'].release()!r}", file=sys.stderr)
+    
+    # Store patched_release for potential retry
+    globals()['_patched_release_func'] = patched_release
 
 # CRITICAL: Import scikit-build AFTER setting _SKBUILD_PLAT_NAME and patching platform.release()
 # scikit-build's constants.py calls _default_skbuild_plat_name() which uses platform.release()
 # Our patch ensures platform.release() returns a parseable value
-from skbuild import setup
+#
+# Wrap the import in a try-except to catch the ValueError and retry with a more aggressive patch
+try:
+    from skbuild import setup
+except ValueError as e:
+    if "not enough values to unpack" in str(e):
+        # The patch didn't work, scikit-build must be importing platform differently
+        # Try a more aggressive approach: patch it right before the import
+        print("DEBUG setup.py: First import attempt failed with ValueError, trying aggressive patch", file=sys.stderr)
+        import importlib
+        # Force reload platform module to ensure our patch is active
+        if 'platform' in sys.modules:
+            importlib.reload(sys.modules['platform'])
+            sys.modules['platform'].release = globals().get('_patched_release_func', lambda: "15.0")
+        # Also ensure it's in the current namespace
+        import platform
+        platform.release = globals().get('_patched_release_func', lambda: "15.0")
+        print(f"DEBUG setup.py: After aggressive patch, platform.release() = {platform.release()!r}", file=sys.stderr)
+        # Try again
+        from skbuild import setup
+    else:
+        raise
 from setuptools import find_packages
 
 if sys.version_info < (3, 6):
