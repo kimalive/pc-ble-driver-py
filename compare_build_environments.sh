@@ -169,8 +169,8 @@ else:
     echo ""
     echo "MACOSX_DEPLOYMENT_TARGET (build-time): ${MACOSX_DEPLOYMENT_TARGET:-not set}"
     if [ -z "${MACOSX_DEPLOYMENT_TARGET}" ]; then
-        echo "  ⚠️  WARNING: MACOSX_DEPLOYMENT_TARGET not set in environment"
-        echo "     build_wheels.sh should set this to 11.0"
+        echo "  ℹ️  NOTE: MACOSX_DEPLOYMENT_TARGET not set in current environment (expected when running script standalone)"
+        echo "     build_wheels.sh sets this to 11.0 when it runs (see 'Build Configuration' section above)"
     elif [ "${MACOSX_DEPLOYMENT_TARGET}" != "11.0" ]; then
         echo "  ⚠️  WARNING: MACOSX_DEPLOYMENT_TARGET is ${MACOSX_DEPLOYMENT_TARGET}, expected 11.0"
     else
