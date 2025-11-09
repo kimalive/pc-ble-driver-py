@@ -191,17 +191,7 @@ jobs:
             else
               TIMEOUT_CMD=""
             fi
-            $TIMEOUT_CMD python -c "
-import sys
-import os
-# Remove project source from path to ensure we use installed wheel
-sys.path = [p for p in sys.path if 'pc-ble-driver-py' not in p or 'site-packages' in p]
-import pc_ble_driver_py
-print('✓ Imported pc_ble_driver_py')
-import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5
-print('✓ Imported nrf_ble_driver_sd_api_v5')
-print('✓ Wheel test passed')
-" 2>&1
+            $TIMEOUT_CMD python -c 'import sys; import os; sys.path = [p for p in sys.path if "pc-ble-driver-py" not in p or "site-packages" in p]; import pc_ble_driver_py; print("✓ Imported pc_ble_driver_py"); import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5; print("✓ Imported nrf_ble_driver_sd_api_v5"); print("✓ Wheel test passed")' 2>&1
             TEST_EXIT=$?
             if [ $TEST_EXIT -eq 0 ]; then
               echo "✓ Wheel test passed"
@@ -404,17 +394,7 @@ print('✓ Wheel test passed')
             else
               TIMEOUT_CMD=""
             fi
-            $TIMEOUT_CMD python -c "
-import sys
-import os
-# Remove project source from path to ensure we use installed wheel
-sys.path = [p for p in sys.path if 'pc-ble-driver-py' not in p or 'site-packages' in p]
-import pc_ble_driver_py
-print('✓ Imported pc_ble_driver_py')
-import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5
-print('✓ Imported nrf_ble_driver_sd_api_v5')
-print('✓ Wheel test passed')
-" 2>&1
+            $TIMEOUT_CMD python -c 'import sys; import os; sys.path = [p for p in sys.path if "pc-ble-driver-py" not in p or "site-packages" in p]; import pc_ble_driver_py; print("✓ Imported pc_ble_driver_py"); import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5; print("✓ Imported nrf_ble_driver_sd_api_v5"); print("✓ Wheel test passed")' 2>&1
             TEST_EXIT=$?
             if [ $TEST_EXIT -eq 0 ]; then
               echo "✓ Wheel test passed"
