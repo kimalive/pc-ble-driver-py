@@ -508,9 +508,7 @@ jobs:
           WHEELS_BEFORE=$(ls -1 dist/*.whl 2>/dev/null | wc -l || echo "0")
           echo "Wheels in dist/ before build: $WHEELS_BEFORE"
           
-          # Patch scikit-build constants.py to handle single-part macOS release (e.g., "15")
-          echo "=== Patching scikit-build (ARM64) to handle macOS release format ==="
-          $PYTHON_EXE_ABS -c 'import re,sys,traceback; import skbuild.constants as c; p=c.__file__; print(f"scikit-build constants.py: {p}"); s=open(p,"r").read(); pat=r"major_macos,\s*minor_macos\s*=\s*release\.split\([^)]+\)\[:2\]"; _m=re.search(pat,s); rep="parts = release.split(\\".\\")\\nif len(parts) < 2:\\n    release = f\\"{parts[0]}.0\\" if parts else \\"15.0\\"\\nmajor_macos, minor_macos = release.split(\\".\\")[:2]"; s_new=re.sub(pat,rep,s) if _m else s; (_ := open(p,\\"w\\").write(s_new)) if s_new!=s else None; print(\\"✓ Patched scikit-build constants.py\\" if s_new!=s else (\\"Pattern matched but identical; skipping write\\" if _m else \\"Pattern not found in constants.py; no patch applied\\"))'
+          # (Removed inline scikit-build patch; relying on pinned scikit-build version)
           
           # Environment variables are set in the step's env: section above
           # This includes: MACOSX_DEPLOYMENT_TARGET, _SKBUILD_PLAT_NAME, VCPKG_ROOT, etc.
