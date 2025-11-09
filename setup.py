@@ -86,10 +86,26 @@ if sys.platform == "darwin":
             os.environ["_SKBUILD_PLAT_NAME"] = "macosx-15.0-x86_64"
     
     # DEBUG: Print the value to verify it's set (remove in production if needed)
-    print(f"DEBUG setup.py: _SKBUILD_PLAT_NAME = {os.environ.get('_SKBUILD_PLAT_NAME', 'NOT SET')}", file=sys.stderr)
+    plat_name = os.environ.get('_SKBUILD_PLAT_NAME', 'NOT SET')
+    print(f"DEBUG setup.py: _SKBUILD_PLAT_NAME = {plat_name}", file=sys.stderr)
+    
+    # CRITICAL: Force set it again right before import to ensure it's definitely there
+    # Sometimes environment variables can be lost or not properly inherited
+    if plat_name != 'NOT SET':
+        # Re-set it to ensure it's definitely in the environment dict
+        os.environ["_SKBUILD_PLAT_NAME"] = plat_name
+        print(f"DEBUG setup.py: Re-verified _SKBUILD_PLAT_NAME = {plat_name}", file=sys.stderr)
+    else:
+        # Emergency fallback - should never happen but just in case
+        import platform
+        arch = platform.machine() if hasattr(platform, 'machine') else "arm64"
+        fallback = f"macosx-15.0-{arch}"
+        os.environ["_SKBUILD_PLAT_NAME"] = fallback
+        print(f"DEBUG setup.py: EMERGENCY FALLBACK - set _SKBUILD_PLAT_NAME = {fallback}", file=sys.stderr)
 
 # CRITICAL: Import scikit-build AFTER setting _SKBUILD_PLAT_NAME
 # scikit-build checks os.environ.get('_SKBUILD_PLAT_NAME') in constants.py at import time
+# The check happens at module level: _SKBUILD_PLAT_NAME = os.environ.get('_SKBUILD_PLAT_NAME') or _default_skbuild_plat_name()
 from skbuild import setup
 from setuptools import find_packages
 
