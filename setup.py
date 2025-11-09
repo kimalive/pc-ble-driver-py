@@ -38,6 +38,15 @@ import sys
 import re
 import codecs
 import os
+import platform
+# Ensure scikit-build sees a valid platform name on macOS before import
+if sys.platform == "darwin":
+    # Prefer explicit env from CI; otherwise set a safe default based on arch
+    if "SKBUILD_PLAT_NAME" not in os.environ:
+        arch = platform.machine()
+        arch = "arm64" if arch == "arm64" else "x86_64"
+        os.environ["SKBUILD_PLAT_NAME"] = f"macosx-11.0-{arch}"
+
 from skbuild import setup
 from setuptools import find_packages
 
