@@ -42,16 +42,28 @@ import os
 # CRITICAL: Set _SKBUILD_PLAT_NAME before importing scikit-build
 # This fixes the ValueError when scikit-build tries to parse macOS version
 # scikit-build expects platform.release() to return "X.Y" but newer macOS returns "X"
-if sys.platform == "darwin" and "_SKBUILD_PLAT_NAME" not in os.environ:
-    import platform
-    macos_version = platform.mac_ver()[0]  # e.g., "15.7.1"
-    if macos_version:
-        major, minor = macos_version.split(".")[:2]
-        arch = platform.machine()  # e.g., "arm64" or "x86_64"
-        if arch == "arm64":
-            os.environ["_SKBUILD_PLAT_NAME"] = f"macosx-{major}.{minor}-arm64"
-        else:
-            os.environ["_SKBUILD_PLAT_NAME"] = f"macosx-{major}.{minor}-x86_64"
+# We MUST set this before any scikit-build imports, as it's checked at module import time
+if sys.platform == "darwin":
+    if "_SKBUILD_PLAT_NAME" not in os.environ:
+        import platform
+        try:
+            macos_version = platform.mac_ver()[0]  # e.g., "15.7.1"
+            if macos_version:
+                parts = macos_version.split(".")
+                major = parts[0] if len(parts) > 0 else "15"
+                minor = parts[1] if len(parts) > 1 else "0"
+                arch = platform.machine()  # e.g., "arm64" or "x86_64"
+                if arch == "arm64":
+                    os.environ["_SKBUILD_PLAT_NAME"] = f"macosx-{major}.{minor}-arm64"
+                else:
+                    os.environ["_SKBUILD_PLAT_NAME"] = f"macosx-{major}.{minor}-x86_64"
+        except Exception as e:
+            # Fallback if platform.mac_ver() fails
+            arch = platform.machine()
+            if arch == "arm64":
+                os.environ["_SKBUILD_PLAT_NAME"] = "macosx-15.0-arm64"
+            else:
+                os.environ["_SKBUILD_PLAT_NAME"] = "macosx-15.0-x86_64"
 
 from skbuild import setup
 from setuptools import find_packages
