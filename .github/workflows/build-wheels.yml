@@ -97,6 +97,42 @@ jobs:
           # Build wheel with explicit Python detection flags
           # CRITICAL: Unset PYTHONPATH and adjust PATH to prevent interference
           # CRITICAL: Also ensure we're using the same build environment as local
+          echo "=== Build Environment Info ==="
+          echo "Python executable: $PYTHON_EXE_ABS"
+          echo "Python version: $PYTHON_VER"
+          echo "Python library: $PYTHON_LIB"
+          echo "Python root: $PYTHON_ROOT_DIR"
+          echo ""
+          echo "=== System Info ==="
+          echo "macOS version: $(sw_vers -productVersion)"
+          echo "macOS build: $(sw_vers -buildVersion)"
+          echo "Architecture: $(uname -m)"
+          echo "Kernel: $(uname -r)"
+          echo ""
+          echo "=== Compiler Info ==="
+          echo "CC: $(which cc)"
+          echo "CXX: $(which c++)"
+          echo "CC version: $(cc --version 2>/dev/null | head -1 || echo 'Unknown')"
+          echo "CXX version: $(c++ --version 2>/dev/null | head -1 || echo 'Unknown')"
+          echo ""
+          echo "=== Python Build Configuration ==="
+          $PYTHON_EXE_ABS -c 'import sysconfig; import sys; print(f"MACOSX_DEPLOYMENT_TARGET: {sysconfig.get_config_var(\"MACOSX_DEPLOYMENT_TARGET\")}"); print(f"CFLAGS: {sysconfig.get_config_var(\"CFLAGS\")}"); print(f"LDFLAGS: {sysconfig.get_config_var(\"LDFLAGS\")}"); print(f"LDSHARED: {sysconfig.get_config_var(\"LDSHARED\")}"); print(f"CC: {sysconfig.get_config_var(\"CC\")}"); print(f"CXX: {sysconfig.get_config_var(\"CXX\")}"); print(f"Python executable: {sys.executable}"); print(f"Python prefix: {sys.prefix}"); print(f"Python base prefix: {sys.base_prefix}")' 2>&1 || echo "⚠️  Could not get Python build config"
+          echo ""
+          echo "=== Environment Variables ==="
+          echo "VCPKG_ROOT: $VCPKG_ROOT"
+          echo "CMAKE_TOOLCHAIN_FILE: $CMAKE_TOOLCHAIN_FILE"
+          echo "CMAKE_PREFIX_PATH: $CMAKE_PREFIX_PATH"
+          echo "DYLD_LIBRARY_PATH: ${DYLD_LIBRARY_PATH:-not set}"
+          echo "MACOSX_DEPLOYMENT_TARGET: ${MACOSX_DEPLOYMENT_TARGET:-not set}"
+          echo "CFLAGS: ${CFLAGS:-not set}"
+          echo "CXXFLAGS: ${CXXFLAGS:-not set}"
+          echo "LDFLAGS: ${LDFLAGS:-not set}"
+          echo ""
+          echo "=== CMake Version ==="
+          cmake --version || echo "⚠️  cmake not found"
+          echo ""
+          echo "=== Building wheel ==="
+          BUILD_LOG="/tmp/build_wheel_${PYTHON_VER//./}.log"
           env -u PYTHONPATH PATH="$(dirname "$PYTHON_EXE_ABS"):$PATH" \
             $PYTHON_EXE_ABS setup.py bdist_wheel --build-type Release -- \
             -DCMAKE_OSX_ARCHITECTURES=x86_64 \
@@ -106,7 +142,48 @@ jobs:
             -DPython3_FIND_STRATEGY=LOCATION \
             -DPython3_FIND_REGISTRY=NEVER \
             -DPython3_FIND_VIRTUALENV=ONLY \
-            -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON
+            -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
+            2>&1 | tee "$BUILD_LOG"
+          
+          # After build, verify the .so file was created and check its linking
+          echo ""
+          echo "=== Verifying built .so file ==="
+          SO_FILE=$(find _skbuild -name "_nrf_ble_driver_sd_api_v5.so" -path "*/x86_64-${PYTHON_VER}/*" 2>/dev/null | head -1)
+          if [ -n "$SO_FILE" ] && [ -f "$SO_FILE" ]; then
+            echo "Found .so file: $SO_FILE"
+            echo "File size: $(ls -lh "$SO_FILE" | awk '{print $5}')"
+            echo ""
+            echo "=== Linking Info ==="
+            otool -L "$SO_FILE" | head -20
+            echo ""
+            echo "=== Python Library Link ==="
+            otool -L "$SO_FILE" | grep -E "(python|Python)" || echo "  ⚠️  No Python library found in linking"
+            echo ""
+            echo "=== Load Commands ==="
+            otool -l "$SO_FILE" | grep -A 5 "LC_LOAD_DYLIB" | head -20
+            echo ""
+            echo "=== RPath Info ==="
+            otool -l "$SO_FILE" | grep -A 2 "LC_RPATH" || echo "  No RPATH found"
+            echo ""
+            echo "=== File Type ==="
+            file "$SO_FILE"
+            echo ""
+            echo "=== Symbols (first 20) ==="
+            nm "$SO_FILE" 2>/dev/null | head -20 || echo "  Could not read symbols"
+          else
+            echo "⚠️  Warning: Could not find built .so file"
+            echo "Searching in _skbuild:"
+            find _skbuild -name "*.so" -type f 2>/dev/null | head -10
+          fi
+          
+          # Save build log as artifact for debugging
+          echo ""
+          echo "=== Build log saved to: $BUILD_LOG ==="
+          if [ -f "$BUILD_LOG" ]; then
+            echo "Build log size: $(ls -lh "$BUILD_LOG" | awk '{print $5}')"
+            echo "Last 50 lines of build log:"
+            tail -50 "$BUILD_LOG"
+          fi
 
       - name: Rename wheel to preserve Python version
         if: success()
@@ -201,7 +278,7 @@ jobs:
             else
               TIMEOUT_CMD=""
             fi
-            $TIMEOUT_CMD python -c 'import sys; import os; TEMP_DIR = os.environ.get("PYTHONPATH", "").split(":")[0] if os.environ.get("PYTHONPATH") else ""; [sys.path.insert(0, TEMP_DIR) for _ in [None] if TEMP_DIR]; sys.path = [p for p in sys.path if p and (TEMP_DIR in p or "site-packages" in p)]; import pc_ble_driver_py; print("✓ Imported pc_ble_driver_py"); import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5; print("✓ Imported nrf_ble_driver_sd_api_v5"); print("✓ Wheel test passed")' 2>&1
+            $TIMEOUT_CMD python -c 'import sys; import os; TEMP_DIR = os.environ.get("PYTHONPATH", "").split(":")[0] if os.environ.get("PYTHONPATH") else ""; [sys.path.insert(0, TEMP_DIR) for _ in [None] if TEMP_DIR]; sys.path = [p for p in sys.path if p and (TEMP_DIR in p or "site-packages" in p)]; import pc_ble_driver_py; print("✓ Imported pc_ble_driver_py"); import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5; print("✓ Imported nrf_ble_driver_sd_api_v5"); from pc_ble_driver_py.ble_driver import BLEDriver; print("✓ Imported BLEDriver"); driver = BLEDriver(); print("✓ Created BLEDriver instance"); print("✓ Wheel test passed")' 2>&1
             TEST_EXIT=$?
             # Clean up temp install directory
             rm -rf "$TEMP_INSTALL_DIR" 2>/dev/null || true
@@ -219,6 +296,15 @@ jobs:
           else
             echo "⚠️  No wheel found to test"
           fi
+
+      - name: Upload build logs (x86_64)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-x86_64-py${{ matrix.python-version }}
+          path: /tmp/build_wheel_*.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Upload x86_64 wheel
         uses: actions/upload-artifact@v4
@@ -306,6 +392,42 @@ jobs:
           # Build wheel with explicit Python detection flags
           # CRITICAL: Unset PYTHONPATH and adjust PATH to prevent interference
           # CRITICAL: Also ensure we're using the same build environment as local
+          echo "=== Build Environment Info ==="
+          echo "Python executable: $PYTHON_EXE_ABS"
+          echo "Python version: $PYTHON_VER"
+          echo "Python library: $PYTHON_LIB"
+          echo "Python root: $PYTHON_ROOT_DIR"
+          echo ""
+          echo "=== System Info ==="
+          echo "macOS version: $(sw_vers -productVersion)"
+          echo "macOS build: $(sw_vers -buildVersion)"
+          echo "Architecture: $(uname -m)"
+          echo "Kernel: $(uname -r)"
+          echo ""
+          echo "=== Compiler Info ==="
+          echo "CC: $(which cc)"
+          echo "CXX: $(which c++)"
+          echo "CC version: $(cc --version 2>/dev/null | head -1 || echo 'Unknown')"
+          echo "CXX version: $(c++ --version 2>/dev/null | head -1 || echo 'Unknown')"
+          echo ""
+          echo "=== Python Build Configuration ==="
+          $PYTHON_EXE_ABS -c 'import sysconfig; import sys; print(f"MACOSX_DEPLOYMENT_TARGET: {sysconfig.get_config_var(\"MACOSX_DEPLOYMENT_TARGET\")}"); print(f"CFLAGS: {sysconfig.get_config_var(\"CFLAGS\")}"); print(f"LDFLAGS: {sysconfig.get_config_var(\"LDFLAGS\")}"); print(f"LDSHARED: {sysconfig.get_config_var(\"LDSHARED\")}"); print(f"CC: {sysconfig.get_config_var(\"CC\")}"); print(f"CXX: {sysconfig.get_config_var(\"CXX\")}"); print(f"Python executable: {sys.executable}"); print(f"Python prefix: {sys.prefix}"); print(f"Python base prefix: {sys.base_prefix}")' 2>&1 || echo "⚠️  Could not get Python build config"
+          echo ""
+          echo "=== Environment Variables ==="
+          echo "VCPKG_ROOT: $VCPKG_ROOT"
+          echo "CMAKE_TOOLCHAIN_FILE: $CMAKE_TOOLCHAIN_FILE"
+          echo "CMAKE_PREFIX_PATH: $CMAKE_PREFIX_PATH"
+          echo "DYLD_LIBRARY_PATH: ${DYLD_LIBRARY_PATH:-not set}"
+          echo "MACOSX_DEPLOYMENT_TARGET: ${MACOSX_DEPLOYMENT_TARGET:-not set}"
+          echo "CFLAGS: ${CFLAGS:-not set}"
+          echo "CXXFLAGS: ${CXXFLAGS:-not set}"
+          echo "LDFLAGS: ${LDFLAGS:-not set}"
+          echo ""
+          echo "=== CMake Version ==="
+          cmake --version || echo "⚠️  cmake not found"
+          echo ""
+          echo "=== Building wheel ==="
+          BUILD_LOG="/tmp/build_wheel_${PYTHON_VER//./}.log"
           env -u PYTHONPATH PATH="$(dirname "$PYTHON_EXE_ABS"):$PATH" \
             $PYTHON_EXE_ABS setup.py bdist_wheel --build-type Release -- \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
@@ -315,7 +437,48 @@ jobs:
             -DPython3_FIND_STRATEGY=LOCATION \
             -DPython3_FIND_REGISTRY=NEVER \
             -DPython3_FIND_VIRTUALENV=ONLY \
-            -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON
+            -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
+            2>&1 | tee "$BUILD_LOG"
+          
+          # After build, verify the .so file was created and check its linking
+          echo ""
+          echo "=== Verifying built .so file ==="
+          SO_FILE=$(find _skbuild -name "_nrf_ble_driver_sd_api_v5.so" -path "*/arm64-${PYTHON_VER}/*" 2>/dev/null | head -1)
+          if [ -n "$SO_FILE" ] && [ -f "$SO_FILE" ]; then
+            echo "Found .so file: $SO_FILE"
+            echo "File size: $(ls -lh "$SO_FILE" | awk '{print $5}')"
+            echo ""
+            echo "=== Linking Info ==="
+            otool -L "$SO_FILE" | head -20
+            echo ""
+            echo "=== Python Library Link ==="
+            otool -L "$SO_FILE" | grep -E "(python|Python)" || echo "  ⚠️  No Python library found in linking"
+            echo ""
+            echo "=== Load Commands ==="
+            otool -l "$SO_FILE" | grep -A 5 "LC_LOAD_DYLIB" | head -20
+            echo ""
+            echo "=== RPath Info ==="
+            otool -l "$SO_FILE" | grep -A 2 "LC_RPATH" || echo "  No RPATH found"
+            echo ""
+            echo "=== File Type ==="
+            file "$SO_FILE"
+            echo ""
+            echo "=== Symbols (first 20) ==="
+            nm "$SO_FILE" 2>/dev/null | head -20 || echo "  Could not read symbols"
+          else
+            echo "⚠️  Warning: Could not find built .so file"
+            echo "Searching in _skbuild:"
+            find _skbuild -name "*.so" -type f 2>/dev/null | head -10
+          fi
+          
+          # Save build log as artifact for debugging
+          echo ""
+          echo "=== Build log saved to: $BUILD_LOG ==="
+          if [ -f "$BUILD_LOG" ]; then
+            echo "Build log size: $(ls -lh "$BUILD_LOG" | awk '{print $5}')"
+            echo "Last 50 lines of build log:"
+            tail -50 "$BUILD_LOG"
+          fi
 
       - name: Rename wheel to preserve Python version
         if: success()
@@ -410,7 +573,7 @@ jobs:
             else
               TIMEOUT_CMD=""
             fi
-            $TIMEOUT_CMD python -c 'import sys; import os; TEMP_DIR = os.environ.get("PYTHONPATH", "").split(":")[0] if os.environ.get("PYTHONPATH") else ""; [sys.path.insert(0, TEMP_DIR) for _ in [None] if TEMP_DIR]; sys.path = [p for p in sys.path if p and (TEMP_DIR in p or "site-packages" in p)]; import pc_ble_driver_py; print("✓ Imported pc_ble_driver_py"); import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5; print("✓ Imported nrf_ble_driver_sd_api_v5"); print("✓ Wheel test passed")' 2>&1
+            $TIMEOUT_CMD python -c 'import sys; import os; TEMP_DIR = os.environ.get("PYTHONPATH", "").split(":")[0] if os.environ.get("PYTHONPATH") else ""; [sys.path.insert(0, TEMP_DIR) for _ in [None] if TEMP_DIR]; sys.path = [p for p in sys.path if p and (TEMP_DIR in p or "site-packages" in p)]; import pc_ble_driver_py; print("✓ Imported pc_ble_driver_py"); import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5; print("✓ Imported nrf_ble_driver_sd_api_v5"); from pc_ble_driver_py.ble_driver import BLEDriver; print("✓ Imported BLEDriver"); driver = BLEDriver(); print("✓ Created BLEDriver instance"); print("✓ Wheel test passed")' 2>&1
             TEST_EXIT=$?
             # Clean up temp install directory
             rm -rf "$TEMP_INSTALL_DIR" 2>/dev/null || true
