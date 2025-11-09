@@ -51,18 +51,13 @@ jobs:
         run: |
           ./vcpkg/vcpkg install nrf-ble-driver --triplet x64-osx
 
-      - name: Install build dependencies
+      - name: Setup standardized build environment
         run: |
-          # Install SWIG (latest version - our fix works with both 4.3.x and 4.4.0)
-          # We include Python.h and moduleobject.h in the %begin block to ensure compatibility
-          brew install swig
-          # Verify SWIG installation
-          swig -version || echo "SWIG not found in PATH"
-
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install scikit-build ninja cmake wrapt cryptography
+          # Use standardized setup script to ensure identical environment
+          # This script handles tool versions, environment variables, and fixes
+          # Note: Environment variables are set in the build step's env: section
+          # This step ensures tools are installed and verified
+          bash ./setup_build_environment.sh
 
       - name: Build x86_64 wheel
         env:
@@ -138,17 +133,9 @@ jobs:
           WHEELS_BEFORE=$(ls -1 dist/*.whl 2>/dev/null | wc -l || echo "0")
           echo "Wheels in dist/ before build: $WHEELS_BEFORE"
           
-          # Fix scikit-build issue with macOS version parsing
-          # scikit-build expects platform.release() to return "X.Y" but newer macOS returns "X"
-          # Set _SKBUILD_PLAT_NAME environment variable to work around this
-          MACOS_VERSION=$(sw_vers -productVersion)
-          MACOS_MAJOR=$(echo "$MACOS_VERSION" | cut -d. -f1)
-          MACOS_MINOR=$(echo "$MACOS_VERSION" | cut -d. -f2)
-          if [ -z "$MACOS_MINOR" ]; then
-            MACOS_MINOR="0"
-          fi
-          export _SKBUILD_PLAT_NAME="macosx-${MACOS_MAJOR}.${MACOS_MINOR}-x86_64"
-          echo "Setting _SKBUILD_PLAT_NAME=$_SKBUILD_PLAT_NAME to work around scikit-build macOS version issue"
+          # Environment variables are set in the step's env: section above
+          # This includes: MACOSX_DEPLOYMENT_TARGET, _SKBUILD_PLAT_NAME, VCPKG_ROOT, etc.
+          # _SKBUILD_PLAT_NAME must be set as an env var (not in script) so scikit-build reads it on import
           
           # Use set -o pipefail to ensure we catch errors in the pipeline
           set -o pipefail
@@ -405,25 +392,26 @@ jobs:
         run: |
           ./vcpkg/vcpkg install nrf-ble-driver --triplet arm64-osx
 
-      - name: Install build dependencies
+      - name: Setup standardized build environment
         run: |
-          # Install SWIG (latest version - our fix works with both 4.3.x and 4.4.0)
-          # We include Python.h and moduleobject.h in the %begin block to ensure compatibility
-          brew install swig
-          # Verify SWIG installation
-          swig -version || echo "SWIG not found in PATH"
-
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install scikit-build ninja cmake wrapt cryptography
+          # Use standardized setup script to ensure identical environment
+          # This script handles tool versions, environment variables, and fixes
+          # Note: Environment variables are set in the build step's env: section
+          # This step ensures tools are installed and verified
+          bash ./setup_build_environment.sh
 
       - name: Build ARM64 wheel
         env:
+          # Environment variables are set by setup_build_environment.sh
+          # These are kept here for explicit documentation
           VCPKG_ROOT: ${{ github.workspace }}/vcpkg
           CMAKE_TOOLCHAIN_FILE: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
           CMAKE_PREFIX_PATH: ${{ github.workspace }}/vcpkg/installed/arm64-osx
           MACOSX_DEPLOYMENT_TARGET: 11.0
+          # CRITICAL: Set _SKBUILD_PLAT_NAME before Python imports scikit-build
+          # This must be set as an environment variable, not in the script
+          # GitHub Actions uses macOS 15.7, so we use macosx-15.7-arm64
+          _SKBUILD_PLAT_NAME: macosx-15.7-arm64
         run: |
           # Clean _skbuild to ensure fresh build (prevents cross-version contamination)
           rm -rf _skbuild || true
@@ -493,17 +481,9 @@ jobs:
           WHEELS_BEFORE=$(ls -1 dist/*.whl 2>/dev/null | wc -l || echo "0")
           echo "Wheels in dist/ before build: $WHEELS_BEFORE"
           
-          # Fix scikit-build issue with macOS version parsing
-          # scikit-build expects platform.release() to return "X.Y" but newer macOS returns "X"
-          # Set _SKBUILD_PLAT_NAME environment variable to work around this
-          MACOS_VERSION=$(sw_vers -productVersion)
-          MACOS_MAJOR=$(echo "$MACOS_VERSION" | cut -d. -f1)
-          MACOS_MINOR=$(echo "$MACOS_VERSION" | cut -d. -f2)
-          if [ -z "$MACOS_MINOR" ]; then
-            MACOS_MINOR="0"
-          fi
-          export _SKBUILD_PLAT_NAME="macosx-${MACOS_MAJOR}.${MACOS_MINOR}-arm64"
-          echo "Setting _SKBUILD_PLAT_NAME=$_SKBUILD_PLAT_NAME to work around scikit-build macOS version issue"
+          # Environment variables are set in the step's env: section above
+          # This includes: MACOSX_DEPLOYMENT_TARGET, _SKBUILD_PLAT_NAME, VCPKG_ROOT, etc.
+          # _SKBUILD_PLAT_NAME must be set as an env var (not in script) so scikit-build reads it on import
           
           # Use set -o pipefail to ensure we catch errors in the pipeline
           set -o pipefail
