@@ -102,10 +102,42 @@ if sys.platform == "darwin":
         fallback = f"macosx-15.0-{arch}"
         os.environ["_SKBUILD_PLAT_NAME"] = fallback
         print(f"DEBUG setup.py: EMERGENCY FALLBACK - set _SKBUILD_PLAT_NAME = {fallback}", file=sys.stderr)
+    
+    # CRITICAL: scikit-build's constants.py calls _default_skbuild_plat_name() directly
+    # without checking os.environ first. We must monkey-patch the function before import.
+    # Import the constants module early and patch the function
+    import importlib.util
+    import types
+    
+    # Get the final platform name
+    final_plat_name = os.environ.get('_SKBUILD_PLAT_NAME', 'macosx-15.0-arm64')
+    
+    # Monkey-patch platform.release() to return a value that won't cause the error
+    # This is a workaround for scikit-build's bug
+    import platform as platform_module
+    original_release = platform_module.release
+    
+    def patched_release():
+        """Return a safe macOS version string that scikit-build can parse"""
+        try:
+            # Try to get actual release
+            release = original_release()
+            # If it has a dot, return it
+            if '.' in release:
+                return release
+            # Otherwise, append .0 to make it parseable
+            return f"{release}.0"
+        except Exception:
+            # Fallback
+            return "15.0"
+    
+    # Patch platform.release() before importing scikit-build
+    platform_module.release = patched_release
+    print(f"DEBUG setup.py: Patched platform.release() to return safe value", file=sys.stderr)
 
-# CRITICAL: Import scikit-build AFTER setting _SKBUILD_PLAT_NAME
-# scikit-build checks os.environ.get('_SKBUILD_PLAT_NAME') in constants.py at import time
-# The check happens at module level: _SKBUILD_PLAT_NAME = os.environ.get('_SKBUILD_PLAT_NAME') or _default_skbuild_plat_name()
+# CRITICAL: Import scikit-build AFTER setting _SKBUILD_PLAT_NAME and patching platform.release()
+# scikit-build's constants.py calls _default_skbuild_plat_name() which uses platform.release()
+# Our patch ensures platform.release() returns a parseable value
 from skbuild import setup
 from setuptools import find_packages
 
