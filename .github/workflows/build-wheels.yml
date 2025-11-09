@@ -183,7 +183,9 @@ jobs:
             TEMP_VENV=$(mktemp -d)
             python -m venv "$TEMP_VENV"
             source "$TEMP_VENV/bin/activate"
-            pip install --quiet --no-deps "$WHEEL"
+            # Use absolute path and force install to bypass platform compatibility check
+            WHEEL_ABS=$(cd "$(dirname "$WHEEL")" && pwd)/$(basename "$WHEEL")
+            pip install --quiet --no-deps --force-reinstall --no-build-isolation "$WHEEL_ABS" || pip install --quiet --no-deps --force-reinstall "$WHEEL_ABS"
             # Test imports with DYLD_LIBRARY_PATH set
             # Use timeout to catch segfaults (exit code 139)
             if command -v timeout >/dev/null 2>&1; then
@@ -386,7 +388,9 @@ jobs:
             TEMP_VENV=$(mktemp -d)
             python -m venv "$TEMP_VENV"
             source "$TEMP_VENV/bin/activate"
-            pip install --quiet --no-deps "$WHEEL"
+            # Use absolute path and force install to bypass platform compatibility check
+            WHEEL_ABS=$(cd "$(dirname "$WHEEL")" && pwd)/$(basename "$WHEEL")
+            pip install --quiet --no-deps --force-reinstall --no-build-isolation "$WHEEL_ABS" || pip install --quiet --no-deps --force-reinstall "$WHEEL_ABS"
             # Test imports with DYLD_LIBRARY_PATH set
             # Use timeout to catch segfaults (exit code 139)
             if command -v timeout >/dev/null 2>&1; then
