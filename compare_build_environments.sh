@@ -30,22 +30,56 @@ echo "=== CMake Info ==="
 cmake --version || echo "⚠️  cmake not found"
 echo ""
 
+# Function to find Python executable (same as build_wheels.sh)
+find_python() {
+    local version=$1
+    # Try tox environment first (most reliable)
+    local tox_python=".tox/py${version//./}/bin/python"
+    if [ -f "$tox_python" ]; then
+        echo "$tox_python"
+        return 0
+    fi
+    # Try common locations
+    for base in "/usr/local/bin" "/opt/homebrew/bin" "$HOME/.pyenv/versions/${version}/bin"; do
+        if [ -f "${base}/python${version}" ]; then
+            echo "${base}/python${version}"
+            return 0
+        fi
+    done
+    # Try pyenv with patch version matching
+    if command -v pyenv &> /dev/null; then
+        local pyenv_version=$(pyenv versions --bare 2>/dev/null | grep "^${version}\." | sort -V | tail -1)
+        if [ -n "$pyenv_version" ] && [ -f "${HOME}/.pyenv/versions/${pyenv_version}/bin/python" ]; then
+            echo "${HOME}/.pyenv/versions/${pyenv_version}/bin/python"
+            return 0
+        fi
+    fi
+    # Try direct command
+    if command -v "python${version}" &> /dev/null; then
+        if "python${version}" --version &> /dev/null 2>&1; then
+            echo "python${version}"
+            return 0
+        fi
+    fi
+    return 1
+}
+
 # Python versions to check
 PYTHON_VERSIONS=("3.8" "3.9" "3.10" "3.11" "3.12" "3.13")
 
 for py_ver in "${PYTHON_VERSIONS[@]}"; do
     # Try to find Python executable
-    PYTHON_EXE=""
-    if command -v "python${py_ver}" >/dev/null 2>&1; then
-        PYTHON_EXE="python${py_ver}"
-    elif [ -d "$HOME/.pyenv/versions/${py_ver}" ]; then
-        PYTHON_EXE="$HOME/.pyenv/versions/${py_ver}/bin/python"
-    elif [ -d ".tox/py${py_ver//./}/bin/python" ]; then
-        PYTHON_EXE=".tox/py${py_ver//./}/bin/python"
-    fi
+    PYTHON_EXE=$(find_python "$py_ver")
     
     if [ -z "$PYTHON_EXE" ] || [ ! -f "$PYTHON_EXE" ]; then
-        echo "⚠️  Python ${py_ver} not found, skipping..."
+        echo "⚠️  Python ${py_ver} not found, checking for wheels only..."
+        # Still check for wheels even if Python isn't found
+        WHEEL=$(ls -t dist/pc_ble_driver_py-*-cp${py_ver//./}-abi3-*.whl 2>/dev/null | head -1)
+        if [ -n "$WHEEL" ] && [ -f "$WHEEL" ]; then
+            echo "  Found wheel: $(basename "$WHEEL")"
+            echo "  (Python executable not available for full analysis)"
+        fi
+        echo ""
         continue
     fi
     
@@ -53,9 +87,19 @@ for py_ver in "${PYTHON_VERSIONS[@]}"; do
     echo "Python ${py_ver} Build Configuration"
     echo "=================================================================================="
     echo ""
+    echo "NOTE: This matches how build_wheels.sh finds and uses Python (tox venv first)"
+    echo ""
     
     PYTHON_EXE_ABS=$(cd "$(dirname "$PYTHON_EXE")" && pwd)/$(basename "$PYTHON_EXE")
     PYTHON_ROOT_DIR=$(dirname "$(dirname "$PYTHON_EXE_ABS")")
+    
+    # Check if this is a tox venv (like build_wheels.sh uses)
+    if [[ "$PYTHON_EXE_ABS" == *"/.tox/"* ]]; then
+        echo "✓ Using tox venv Python (same as build_wheels.sh)"
+    else
+        echo "⚠️  Using system Python (build_wheels.sh prefers tox venv)"
+    fi
+    echo ""
     
     echo "=== Python Installation Info ==="
     echo "Python executable: $PYTHON_EXE_ABS"
