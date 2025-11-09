@@ -122,12 +122,18 @@ for py_ver in "${PYTHON_VERSIONS[@]}"; do
     echo ""
     
     echo "=== Python Build Configuration ==="
+    echo "NOTE: The MACOSX_DEPLOYMENT_TARGET shown below is what Python was built with."
+    echo "      This is DIFFERENT from what we set during wheel builds (MACOSX_DEPLOYMENT_TARGET=11.0)."
+    echo "      Our build_wheels.sh overrides this to ensure all wheels use 11.0."
+    echo ""
     $PYTHON_EXE_ABS -c "
 import sysconfig
 import sys
 import os
 
-print(f'MACOSX_DEPLOYMENT_TARGET: {sysconfig.get_config_var(\"MACOSX_DEPLOYMENT_TARGET\")}')
+python_deployment_target = sysconfig.get_config_var('MACOSX_DEPLOYMENT_TARGET')
+print(f'Python built with MACOSX_DEPLOYMENT_TARGET: {python_deployment_target}')
+print(f'  (This is what Python was compiled with, not what we use during builds)')
 print(f'CFLAGS: {sysconfig.get_config_var(\"CFLAGS\")}')
 print(f'LDFLAGS: {sysconfig.get_config_var(\"LDFLAGS\")}')
 print(f'LDSHARED: {sysconfig.get_config_var(\"LDSHARED\")}')
@@ -155,19 +161,30 @@ else:
 " 2>&1 || echo "⚠️  Could not get Python build config"
     echo ""
     
-    echo "=== Environment Variables ==="
+    echo "=== Environment Variables (Build-Time Settings) ==="
     echo "VCPKG_ROOT: ${VCPKG_ROOT:-not set}"
     echo "CMAKE_TOOLCHAIN_FILE: ${CMAKE_TOOLCHAIN_FILE:-not set}"
     echo "CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH:-not set}"
     echo "DYLD_LIBRARY_PATH: ${DYLD_LIBRARY_PATH:-not set}"
-    echo "MACOSX_DEPLOYMENT_TARGET (build-time): ${MACOSX_DEPLOYMENT_TARGET:-not set (should be 11.0 for consistency)}"
+    echo ""
+    echo "MACOSX_DEPLOYMENT_TARGET (build-time): ${MACOSX_DEPLOYMENT_TARGET:-not set}"
+    if [ -z "${MACOSX_DEPLOYMENT_TARGET}" ]; then
+        echo "  ⚠️  WARNING: MACOSX_DEPLOYMENT_TARGET not set in environment"
+        echo "     build_wheels.sh should set this to 11.0"
+    elif [ "${MACOSX_DEPLOYMENT_TARGET}" != "11.0" ]; then
+        echo "  ⚠️  WARNING: MACOSX_DEPLOYMENT_TARGET is ${MACOSX_DEPLOYMENT_TARGET}, expected 11.0"
+    else
+        echo "  ✓ MACOSX_DEPLOYMENT_TARGET correctly set to 11.0"
+    fi
+    echo ""
     echo "CFLAGS: ${CFLAGS:-not set}"
     echo "CXXFLAGS: ${CXXFLAGS:-not set}"
     echo "LDFLAGS: ${LDFLAGS:-not set}"
     echo ""
-    echo "NOTE: Python's built-in MACOSX_DEPLOYMENT_TARGET (above) is what Python was built with."
-    echo "      The build-time MACOSX_DEPLOYMENT_TARGET (from environment) is what we use during compilation."
-    echo "      build_wheels.sh sets MACOSX_DEPLOYMENT_TARGET=11.0 to ensure consistency."
+    echo "IMPORTANT: The MACOSX_DEPLOYMENT_TARGET shown above in 'Python Build Configuration'"
+    echo "           is what Python was built with (varies by Python installation)."
+    echo "           The MACOSX_DEPLOYMENT_TARGET shown here is what we set during wheel builds."
+    echo "           build_wheels.sh sets MACOSX_DEPLOYMENT_TARGET=11.0 to override Python's value."
     echo ""
     
     # Check if we have a built wheel for this version
