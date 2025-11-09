@@ -103,14 +103,15 @@ if sys.platform == "darwin":
         os.environ["_SKBUILD_PLAT_NAME"] = fallback
         print(f"DEBUG setup.py: EMERGENCY FALLBACK - set _SKBUILD_PLAT_NAME = {fallback}", file=sys.stderr)
     
-    # CRITICAL: scikit-build's constants.py calls _default_skbuild_plat_name() directly
+    # CRITICAL: scikit-build's constants.py calls _default_skbuild_plat_name() at module import time
     # which uses platform.release(). On newer macOS, platform.release() returns "15" (no dot),
     # causing ValueError: not enough values to unpack (expected 2, got 1)
-    # We must monkey-patch platform.release() BEFORE any scikit-build imports
     # 
     # The issue: scikit-build does: release = platform.release(); major, minor = release.split(".")[:2]
     # If release is "15" (no dot), split(".") returns ["15"], causing the ValueError
+    # 
     # Solution: Patch platform.release() to always return a value with at least one dot
+    # We must patch it in multiple places to ensure scikit-build sees it
     
     import platform
     
@@ -145,15 +146,21 @@ if sys.platform == "darwin":
     # This must happen before any scikit-build code runs
     platform.release = patched_release
     
-    # Verify the patch works
-    test_release = platform.release()
-    print(f"DEBUG setup.py: Patched platform.release() = {test_release!r}", file=sys.stderr)
-    
     # CRITICAL: Also patch it in sys.modules['platform'] to ensure all imports see it
     # This is necessary because Python caches module imports
     if 'platform' in sys.modules:
         sys.modules['platform'].release = patched_release
-        print(f"DEBUG setup.py: Also patched sys.modules['platform'].release", file=sys.stderr)
+    
+    # CRITICAL: Also patch it in the builtins module (platform is a builtin)
+    # This ensures the patch is visible even if scikit-build imports platform differently
+    import builtins
+    if hasattr(builtins, 'platform'):
+        builtins.platform = platform
+    
+    # Verify the patch works
+    test_release = platform.release()
+    print(f"DEBUG setup.py: Patched platform.release() = {test_release!r}", file=sys.stderr)
+    print(f"DEBUG setup.py: sys.modules['platform'].release = {sys.modules['platform'].release()!r}", file=sys.stderr)
 
 # CRITICAL: Import scikit-build AFTER setting _SKBUILD_PLAT_NAME and patching platform.release()
 # scikit-build's constants.py calls _default_skbuild_plat_name() which uses platform.release()
