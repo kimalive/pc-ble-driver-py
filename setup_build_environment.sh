@@ -73,11 +73,13 @@ echo ""
 echo "=== Installing Python Build Dependencies ==="
 python -m pip install --upgrade pip
 python -m pip install --upgrade \
-    "scikit-build>=0.18.0" \
+    "scikit-build==0.18.6" \
     "ninja>=1.10.0" \
     "cmake>=3.20.0" \
     "wrapt>=1.14.0" \
     "cryptography>=3.4.0"
+echo "scikit-build version check:"
+python -c 'import skbuild; print("scikit-build:", skbuild.__version__)'
 
 # Verify vcpkg setup
 echo ""
