@@ -231,6 +231,11 @@ foreach(SD_API_VER ${SD_API_VERS})
     message(VERBOSE STATUS "LINK_LIBRARIES are ${LINK_LIBRARIES}")
 
     target_link_libraries(${PYTHON_MODULE_${SD_API_VER}} PRIVATE ${LINK_LIBRARIES})
+    # Ensure we do NOT compile against the Python Limited API (abi3); this must be per-interpreter
+    # Some environments may introduce Py_LIMITED_API via headers or flags; explicitly undefine it.
+    if (CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang|GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+        target_compile_options(${PYTHON_MODULE_${SD_API_VER}} PRIVATE -UPy_LIMITED_API)
+    endif()
     
     # For macOS, fix the Python library path to use @rpath after linking
     if(APPLE)

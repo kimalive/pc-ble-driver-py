@@ -272,6 +272,11 @@ jobs:
             WHEEL=$(ls -t dist/pc_ble_driver_py-*-cp*-*x86_64*.whl 2>/dev/null | head -1)
           fi
           if [ -z "$WHEEL" ]; then
+            echo "No cp*-only wheel found, trying cp*-cp* pattern (non-abi3, per-version ABI)..."
+            # Handle wheels built without abi3 (e.g., cp311-cp311)
+            WHEEL=$(ls -t dist/pc_ble_driver_py-*-cp*-cp*-*x86_64*.whl 2>/dev/null | head -1)
+          fi
+          if [ -z "$WHEEL" ]; then
             echo "No wheel found with cp* pattern, trying any x86_64 wheel..."
             # Last resort: any x86_64 wheel
             WHEEL=$(ls -t dist/pc_ble_driver_py-*-*x86_64*.whl 2>/dev/null | head -1)
@@ -663,6 +668,11 @@ jobs:
             echo "No wheel found with cp38 pattern, trying any cp* pattern..."
             # Fallback: try any wheel with cp tag
             WHEEL=$(ls -t dist/pc_ble_driver_py-*-cp*-*arm64*.whl 2>/dev/null | head -1)
+          fi
+          if [ -z "$WHEEL" ]; then
+            echo "No cp*-only wheel found, trying cp*-cp* pattern (non-abi3, per-version ABI)..."
+            # Handle wheels built without abi3 (e.g., cp312-cp312)
+            WHEEL=$(ls -t dist/pc_ble_driver_py-*-cp*-cp*-*arm64*.whl 2>/dev/null | head -1)
           fi
           if [ -z "$WHEEL" ]; then
             echo "No wheel found with cp* pattern, trying any arm64 wheel..."
