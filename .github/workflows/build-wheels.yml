@@ -65,6 +65,8 @@ jobs:
           CMAKE_TOOLCHAIN_FILE: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
           CMAKE_PREFIX_PATH: ${{ github.workspace }}/vcpkg/installed/x64-osx
           MACOSX_DEPLOYMENT_TARGET: 11.0
+          # Force per-version CPython ABI (disable abi3 tagging to avoid runtime mismatches)
+          SKBUILD_FORCE_ABI3: "0"
           # Ensure scikit-build has a valid platform name at import time
           _SKBUILD_PLAT_NAME: macosx-11.0-x86_64
           SKBUILD_PLAT_NAME: macosx-11.0-x86_64
@@ -448,6 +450,8 @@ jobs:
           CMAKE_TOOLCHAIN_FILE: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
           CMAKE_PREFIX_PATH: ${{ github.workspace }}/vcpkg/installed/arm64-osx
           MACOSX_DEPLOYMENT_TARGET: 11.0
+          # Force per-version CPython ABI (disable abi3 tagging to avoid runtime mismatches)
+          SKBUILD_FORCE_ABI3: "0"
           # CRITICAL: Set _SKBUILD_PLAT_NAME before Python imports scikit-build
           # This must be set as an environment variable, not in the script
           # GitHub Actions uses macOS 15.7, so we use macosx-15.7-arm64
