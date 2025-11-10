@@ -335,6 +335,24 @@ jobs:
             python ${{ github.workspace }}/bundle_into_wheel.py "$WHEEL" || echo "Bundling skipped (optional)"
           fi
 
+      - name: Fix Python library linking in wheel
+        if: success()
+        run: |
+          # Find the wheel that was just built
+          PYTHON_TAG="cp${{ matrix.python-version }}"
+          PYTHON_TAG=$(echo "$PYTHON_TAG" | sed 's/\.//g')
+          WHEEL=$(ls -t dist/pc_ble_driver_py-*-${PYTHON_TAG}-abi3-*x86_64*.whl 2>/dev/null | head -1)
+          if [ -z "$WHEEL" ]; then
+            WHEEL=$(ls -t dist/pc_ble_driver_py-*-*x86_64*.whl 2>/dev/null | head -1)
+          fi
+          if [ -n "$WHEEL" ] && [ -f "$WHEEL" ]; then
+            echo "Fixing Python library linking in: $(basename $WHEEL)"
+            PYTHON_EXE=$(which python)
+            bash ${{ github.workspace }}/fix_wheel_python_linking.sh "$WHEEL" "$PYTHON_EXE"
+          else
+            echo "⚠️  No wheel found to fix"
+          fi
+
       - name: Test wheel after build
         if: success()
         env:
@@ -725,6 +743,24 @@ jobs:
           fi
           if [ -n "$WHEEL" ] && [ -f "$WHEEL" ]; then
             python ${{ github.workspace }}/bundle_into_wheel.py "$WHEEL" || echo "Bundling skipped (optional)"
+          fi
+
+      - name: Fix Python library linking in wheel
+        if: success()
+        run: |
+          # Find the wheel that was just built
+          PYTHON_TAG="cp${{ matrix.python-version }}"
+          PYTHON_TAG=$(echo "$PYTHON_TAG" | sed 's/\.//g')
+          WHEEL=$(ls -t dist/pc_ble_driver_py-*-${PYTHON_TAG}-abi3-*arm64*.whl 2>/dev/null | head -1)
+          if [ -z "$WHEEL" ]; then
+            WHEEL=$(ls -t dist/pc_ble_driver_py-*-*arm64*.whl 2>/dev/null | head -1)
+          fi
+          if [ -n "$WHEEL" ] && [ -f "$WHEEL" ]; then
+            echo "Fixing Python library linking in: $(basename $WHEEL)"
+            PYTHON_EXE=$(which python)
+            bash ${{ github.workspace }}/fix_wheel_python_linking.sh "$WHEEL" "$PYTHON_EXE"
+          else
+            echo "⚠️  No wheel found to fix"
           fi
 
       - name: Test wheel after build

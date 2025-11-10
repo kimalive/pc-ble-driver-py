@@ -41,33 +41,60 @@ def check_import():
         # Set config before importing ble_driver to avoid RuntimeError
         from pc_ble_driver_py import config
         config.__conn_ic_id__ = 'NRF52'
-        # Import without actually using BLEDriver to avoid segfaults
-        # Just check that the module can be imported
-        # Note: Even importing the module can cause segfaults if native libraries aren't correctly linked
-        # So we catch SystemExit and other exceptions that might indicate a segfault
-        try:
-            import pc_ble_driver_py.ble_driver  # noqa: F401
-            print("✓ Import successful")
-            return True
-        except (SystemExit, KeyboardInterrupt):
-            # These might indicate a segfault or other fatal error
-            print("✗ Import caused fatal error (possible segfault)")
+        
+        # CRITICAL: Run import in subprocess to catch segfaults (exit code -11)
+        # Segfaults kill the process before Python can catch exceptions
+        # By running in a subprocess, we can detect the exit code
+        import_code = """
+import sys
+try:
+    from pc_ble_driver_py import config
+    config.__conn_ic_id__ = 'NRF52'
+    import pc_ble_driver_py.ble_driver  # noqa: F401
+    print("✓ Import successful")
+    sys.exit(0)
+except ImportError as e:
+    print(f"⚠ Import failed: {e}")
+    sys.exit(0)  # Not a failure, just can't test without package
+except Exception as e:
+    print(f"✗ Import failed: {e}")
+    import traceback
+    traceback.print_exc()
+    sys.exit(1)
+"""
+        result = subprocess.run(
+            [sys.executable, '-c', import_code],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        # Print output from subprocess
+        if result.stdout:
+            print(result.stdout.strip())
+        if result.stderr:
+            print(result.stderr.strip(), file=sys.stderr)
+        
+        # Check exit code
+        if result.returncode == -11 or result.returncode == 139:
+            # -11 is SIGSEGV on Unix, 139 is -11 + 128 (signal number)
+            print("✗ Import caused segfault (exit code -11)")
             return False
-        except ImportError as e:
-            # If import fails, clear the cache to prevent Python 3.12 from caching incorrect package structure
-            import sys
-            if 'pc_ble_driver_py.lib' in sys.modules:
-                del sys.modules['pc_ble_driver_py.lib']
-            if 'pc_ble_driver_py.ble_driver' in sys.modules:
-                del sys.modules['pc_ble_driver_py.ble_driver']
-            print(f"⚠ Import failed (will retry in next test): {e}")
-            return True  # Not a failure, just can't test without package
+        elif result.returncode != 0:
+            print(f"✗ Import failed with exit code {result.returncode}")
+            return False
+        else:
+            return True
+            
     except ImportError as e:
         print(f"⚠ Package not installed: {e}")
         print("  Install a wheel first to test imports")
         return True  # Not a failure, just can't test without package
+    except subprocess.TimeoutExpired:
+        print("✗ Import test timed out (possible hang)")
+        return False
     except Exception as e:
-        print(f"✗ Import failed: {e}")
+        print(f"✗ Import test failed: {e}")
         import traceback
         traceback.print_exc()
         return False

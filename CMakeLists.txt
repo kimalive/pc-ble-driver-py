@@ -19,16 +19,38 @@ set(PYTHON_LIBRARY_FROM_USER_FLAGS "${PYTHON_LIBRARY}")
 # This overrides PYTHON_LIBRARY_FROM_USER_FLAGS which might point to the wrong Python version
 # (e.g., Python 3.13 when building for Python 3.8)
 if(PYTHON_EXECUTABLE AND APPLE)
+    # First, get Python version to verify we're using the right Python
+    execute_process(
+        COMMAND ${PYTHON_EXECUTABLE} -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
+        OUTPUT_VARIABLE PYTHON_VERSION_FROM_EXE
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+    message(STATUS "Python version from PYTHON_EXECUTABLE: ${PYTHON_VERSION_FROM_EXE}")
+    
+    # Get Python library path
     execute_process(
         COMMAND ${PYTHON_EXECUTABLE} -c "import sysconfig; libdir = sysconfig.get_config_var('LIBDIR'); libfile = sysconfig.get_config_var('LIBRARY'); libpath = f'{libdir}/{libfile}' if libfile else libdir; print(libpath)"
         OUTPUT_VARIABLE PYTHON_LIB_FROM_EXE
         OUTPUT_STRIP_TRAILING_WHITESPACE
         ERROR_QUIET
     )
-    if(PYTHON_LIB_FROM_EXE AND EXISTS "${PYTHON_LIB_FROM_EXE}")
-        # Override PYTHON_LIBRARY_FROM_USER_FLAGS with the correct library from PYTHON_EXECUTABLE
-        set(PYTHON_LIBRARY_FROM_USER_FLAGS "${PYTHON_LIB_FROM_EXE}")
-        message(STATUS "Overriding PYTHON_LIBRARY_FROM_USER_FLAGS with library from PYTHON_EXECUTABLE: ${PYTHON_LIBRARY_FROM_USER_FLAGS}")
+    
+    if(PYTHON_LIB_FROM_EXE)
+        message(STATUS "Python library path from PYTHON_EXECUTABLE: ${PYTHON_LIB_FROM_EXE}")
+        
+        # Check if the library file exists
+        if(EXISTS "${PYTHON_LIB_FROM_EXE}")
+            # Override PYTHON_LIBRARY_FROM_USER_FLAGS with the correct library from PYTHON_EXECUTABLE
+            set(PYTHON_LIBRARY_FROM_USER_FLAGS "${PYTHON_LIB_FROM_EXE}")
+            message(STATUS "✓ Overriding PYTHON_LIBRARY_FROM_USER_FLAGS with library from PYTHON_EXECUTABLE: ${PYTHON_LIBRARY_FROM_USER_FLAGS}")
+        else
+            message(WARNING "Python library file not found at: ${PYTHON_LIB_FROM_EXE}")
+            message(WARNING "This may cause linking issues. The post-build fix script will attempt to correct this.")
+        endif()
+    else
+        message(WARNING "Could not determine Python library path from PYTHON_EXECUTABLE")
+        message(WARNING "This may cause linking issues. The post-build fix script will attempt to correct this.")
     endif()
 endif()
 
