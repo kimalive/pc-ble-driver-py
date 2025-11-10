@@ -56,6 +56,15 @@ if sys.platform == "darwin":
         platform.release = _safe_release
     except Exception:
         pass
+    # Debug: print what Python reports (before importing skbuild)
+    try:
+        print(f"DEBUG setup.py: sys.platform={sys.platform}", file=sys.stderr)
+        print(f"DEBUG setup.py: platform.release()={platform.release()}", file=sys.stderr)
+        print(f"DEBUG setup.py: platform.mac_ver()={platform.mac_ver()}", file=sys.stderr)
+        print(f"DEBUG setup.py: SKBUILD_PLAT_NAME={os.environ.get('SKBUILD_PLAT_NAME')}", file=sys.stderr)
+        print(f"DEBUG setup.py: _SKBUILD_PLAT_NAME={os.environ.get('_SKBUILD_PLAT_NAME')}", file=sys.stderr)
+    except Exception:
+        pass
 
 from skbuild import setup
 from setuptools import find_packages
