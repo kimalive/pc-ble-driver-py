@@ -68,6 +68,17 @@ if sys.platform == "darwin":
 
 from skbuild import setup
 from setuptools import find_packages
+try:
+    from wheel.bdist_wheel import bdist_wheel as _bdist_wheel  # type: ignore
+    class bdist_wheel(_bdist_wheel):  # type: ignore
+        def finalize_options(self):  # type: ignore
+            super().finalize_options()
+            # Force per-version CPython wheels (disable abi3 tagging)
+            # This aligns CI output with local build_wheels.sh behavior
+            self.py_limited_api = False  # type: ignore
+    _CMDCLASS = {"bdist_wheel": bdist_wheel}
+except Exception:
+    _CMDCLASS = {}
 
 if sys.version_info < (3, 6):
     print("pc-ble-driver-py only supports Python version 3.6 and newer")
@@ -110,6 +121,7 @@ setup(
     url="https://github.com/NordicSemiconductor/pc-ble-driver-py",
     license="Modified BSD License",
     author="Nordic Semiconductor ASA",
+    cmdclass=_CMDCLASS,
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
