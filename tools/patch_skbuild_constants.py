@@ -2,6 +2,7 @@
 import sys
 import os
 import sysconfig
+import re
 
 def main() -> int:
     pure = sysconfig.get_paths().get("purelib") or ""
@@ -12,21 +13,24 @@ def main() -> int:
     try:
         with open(path, "r", encoding="utf-8") as f:
             src = f.read()
-        needle = 'major_macos, minor_macos = release.split(".")[:2]'
-        replacement = (
-            'parts = release.split(".")\n'
-            'if len(parts) < 2:\n'
-            '    release = f"{parts[0]}.0" if parts else "15.0"\n'
-            'major_macos, minor_macos = release.split(".")[:2]'
-        )
-        if needle in src:
-            dst = src.replace(needle, replacement)
+        # Preserve indentation of the matched line
+        pattern = r'^([ \t]*)major_macos,\s*minor_macos\s*=\s*release\.split\("."\)\[:2\]\s*$'
+        m = re.search(pattern, src, flags=re.MULTILINE)
+        if m:
+            indent = m.group(1)
+            replacement = (
+                f'{indent}parts = release.split(".")\n'
+                f'{indent}if len(parts) < 2:\n'
+                f'{indent}    release = f"{{parts[0]}}.0" if parts else "15.0"\n'
+                f'{indent}major_macos, minor_macos = release.split(".")[:2]\n'
+            )
+            dst = re.sub(pattern, replacement, src, count=1, flags=re.MULTILINE)
             if dst != src:
                 with open(path, "w", encoding="utf-8") as f:
                     f.write(dst)
-                print("[patch_skbuild] ✓ Patched constants.py")
+                print("[patch_skbuild] ✓ Patched constants.py (indent preserved)")
             else:
-                print("[patch_skbuild] constants.py unchanged (identical after replace)")
+                print("[patch_skbuild] constants.py unchanged (regex no-op)")
         else:
             print("[patch_skbuild] Pattern not found; no change made")
         # show head for diagnostics
