@@ -42,10 +42,11 @@ import platform
 # Ensure scikit-build sees a valid platform name on macOS before import
 if sys.platform == "darwin":
     # Prefer explicit env from CI; otherwise set a safe default based on arch
-    if "SKBUILD_PLAT_NAME" not in os.environ:
-        arch = platform.machine()
-        arch = "arm64" if arch == "arm64" else "x86_64"
-        os.environ["SKBUILD_PLAT_NAME"] = f"macosx-11.0-{arch}"
+    arch = platform.machine()
+    arch = "arm64" if arch == "arm64" else "x86_64"
+    plat = os.environ.get("_SKBUILD_PLAT_NAME") or os.environ.get("SKBUILD_PLAT_NAME") or f"macosx-11.0-{arch}"
+    os.environ["SKBUILD_PLAT_NAME"] = plat
+    os.environ["_SKBUILD_PLAT_NAME"] = plat
     # Patch platform.release() to return X.Y (some macOS return only X)
     try:
         _orig_release = platform.release
