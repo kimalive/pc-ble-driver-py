@@ -113,43 +113,56 @@ for SO_FILE in $SO_FILES; do
     
     # ALWAYS check and fix RPATH (even if library link is already correct)
     # Get Python library directory from the Python executable
-    # In GitHub Actions (hostedtoolcache), we need to be more robust in finding the lib directory
-    PYTHON_LIB_DIR=$($PYTHON_EXE -c "import sysconfig; libdir = sysconfig.get_config_var('LIBDIR'); print(libdir)" 2>/dev/null || echo "")
+    # CRITICAL: In GitHub Actions, sysconfig may return wrong path, so we prioritize executable path detection
     
-    # If LIBDIR is empty or doesn't exist, try multiple fallback methods
-    # Note: We still add the path to RPATH even if directory doesn't exist (it will exist at runtime)
-    if [ -z "$PYTHON_LIB_DIR" ]; then
-        # Method 1: Try to determine from Python executable path (for pyenv, Homebrew, etc.)
+    # Method 1: For GitHub Actions hostedtoolcache, detect from executable path FIRST
+    # This is the most reliable method in GitHub Actions
+    if [[ "$PYTHON_EXE" == *"/hostedtoolcache/Python/"* ]]; then
+        # Extract Python version and path from hostedtoolcache structure
+        # e.g., /Users/runner/hostedtoolcache/Python/3.10.11/arm64/bin/python -> /Users/runner/hostedtoolcache/Python/3.10.11/arm64/lib
+        PYTHON_TOOLCACHE_DIR=$(echo "$PYTHON_EXE" | sed 's|/bin/python.*|/lib|')
+        PYTHON_LIB_DIR="$PYTHON_TOOLCACHE_DIR"
+        echo "  Detected GitHub Actions hostedtoolcache Python - using: $PYTHON_LIB_DIR"
+    # Method 2: Try Python framework structure (Homebrew)
+    elif [[ "$PYTHON_EXE" == *"/Frameworks/Python.framework/"* ]]; then
+        # Extract framework lib path
+        # e.g., /opt/homebrew/.../Frameworks/Python.framework/Versions/3.10/bin/python -> .../Versions/3.10/lib
+        PYTHON_FRAMEWORK_LIB=$(echo "$PYTHON_EXE" | sed 's|/Frameworks/Python.framework/Versions/[^/]*/bin/python.*|/Frameworks/Python.framework/Versions/|')
+        PYTHON_FRAMEWORK_LIB=$(echo "$PYTHON_FRAMEWORK_LIB" | sed 's|/bin/python.*|/lib|')
+        # Try to extract version from path and construct proper path
+        if [[ "$PYTHON_EXE" =~ /Versions/([0-9]+\.[0-9]+)/ ]]; then
+            PYTHON_VER="${BASH_REMATCH[1]}"
+            PYTHON_FRAMEWORK_BASE=$(echo "$PYTHON_EXE" | sed 's|/Frameworks/Python.framework/Versions/[^/]*/.*||')
+            PYTHON_LIB_DIR="${PYTHON_FRAMEWORK_BASE}/Frameworks/Python.framework/Versions/${PYTHON_VER}/lib"
+        else
+            PYTHON_LIB_DIR="$PYTHON_FRAMEWORK_LIB"
+        fi
+        echo "  Detected Python framework - using: $PYTHON_LIB_DIR"
+    # Method 3: Try to determine from Python executable path (for pyenv, etc.)
+    else
         PYTHON_ROOT=$(dirname "$(dirname "$PYTHON_EXE")")
         if [ -d "$PYTHON_ROOT/lib" ]; then
             PYTHON_LIB_DIR="$PYTHON_ROOT/lib"
-        # Method 2: For GitHub Actions hostedtoolcache, try standard structure
-        elif [[ "$PYTHON_EXE" == *"/hostedtoolcache/Python/"* ]]; then
-            # Extract Python version and path from hostedtoolcache structure
-            # e.g., /Users/runner/hostedtoolcache/Python/3.10.18/arm64/bin/python -> /Users/runner/hostedtoolcache/Python/3.10.18/arm64/lib
-            PYTHON_TOOLCACHE_DIR=$(echo "$PYTHON_EXE" | sed 's|/bin/python.*|/lib|')
-            PYTHON_LIB_DIR="$PYTHON_TOOLCACHE_DIR"
-        # Method 3: Try Python framework structure (Homebrew)
-        elif [[ "$PYTHON_EXE" == *"/Frameworks/Python.framework/"* ]]; then
-            # Extract framework lib path
-            # e.g., /opt/homebrew/.../Frameworks/Python.framework/Versions/3.10/bin/python -> .../Versions/3.10/lib
-            PYTHON_FRAMEWORK_LIB=$(echo "$PYTHON_EXE" | sed 's|/Frameworks/Python.framework/Versions/[^/]*/bin/python.*|/Frameworks/Python.framework/Versions/|')
-            PYTHON_FRAMEWORK_LIB=$(echo "$PYTHON_FRAMEWORK_LIB" | sed 's|/bin/python.*|/lib|')
-            # Try to extract version from path and construct proper path
-            if [[ "$PYTHON_EXE" =~ /Versions/([0-9]+\.[0-9]+)/ ]]; then
-                PYTHON_VER="${BASH_REMATCH[1]}"
-                PYTHON_FRAMEWORK_BASE=$(echo "$PYTHON_EXE" | sed 's|/Frameworks/Python.framework/Versions/[^/]*/.*||')
-                PYTHON_LIB_DIR="${PYTHON_FRAMEWORK_BASE}/Frameworks/Python.framework/Versions/${PYTHON_VER}/lib"
-            else
-                PYTHON_LIB_DIR="$PYTHON_FRAMEWORK_LIB"
-            fi
+            echo "  Detected from executable path - using: $PYTHON_LIB_DIR"
         fi
     fi
     
-    # Final fallback: use sysconfig LIBDIR even if directory doesn't exist
-    # (it will exist at runtime when Python is installed on user's machine)
+    # Fallback: use sysconfig LIBDIR, but only if we haven't found it yet
+    # NOTE: In GitHub Actions, sysconfig may return wrong path, so this is last resort
     if [ -z "$PYTHON_LIB_DIR" ]; then
         PYTHON_LIB_DIR=$($PYTHON_EXE -c "import sysconfig; print(sysconfig.get_config_var('LIBDIR'))" 2>/dev/null || echo "")
+        if [ -n "$PYTHON_LIB_DIR" ]; then
+            echo "  Using sysconfig LIBDIR (fallback): $PYTHON_LIB_DIR"
+            # In GitHub Actions, sysconfig may return /Library/Frameworks path which is wrong
+            # Check if it's a framework path and we're in hostedtoolcache - if so, ignore it
+            if [[ "$PYTHON_LIB_DIR" == /Library/Frameworks* ]] && [[ "$PYTHON_EXE" == *"/hostedtoolcache/"* ]]; then
+                echo "  ⚠️  WARNING: sysconfig returned framework path but we're in hostedtoolcache"
+                echo "     Ignoring sysconfig result and using executable path instead"
+                PYTHON_TOOLCACHE_DIR=$(echo "$PYTHON_EXE" | sed 's|/bin/python.*|/lib|')
+                PYTHON_LIB_DIR="$PYTHON_TOOLCACHE_DIR"
+                echo "     Using: $PYTHON_LIB_DIR"
+            fi
+        fi
     fi
     
     if [ -n "$PYTHON_LIB_DIR" ]; then
