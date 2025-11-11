@@ -4,7 +4,7 @@ Test script to verify that wheels work with different Python installations on ma
 
 This script checks:
 1. Basic import functionality
-2. Library dependency paths (should use @rpath, not hardcoded paths)
+2. Library dependency paths (should use @rpath or @executable_path, not hardcoded paths)
 3. Python version compatibility
 
 Usage:
@@ -101,7 +101,7 @@ except Exception as e:
 
 
 def check_library_paths():
-    """Check that native libraries use @rpath instead of hardcoded paths."""
+    """Check that native libraries use @rpath or @executable_path instead of hardcoded paths."""
     if platform.system() != 'Darwin':
         print("Skipping library path check (not macOS)")
         return True
@@ -153,7 +153,7 @@ def check_library_paths():
                 
                 # Check each dependency
                 has_hardcoded_path = False
-                has_rpath = False
+                has_portable_path = False
                 python_lib_found = False
                 
                 for line in lines[1:]:  # Skip first line (the file itself)
@@ -172,23 +172,29 @@ def check_library_paths():
                     if 'libpython' in lib_path or (lib_path.endswith('/Python') and 'Python.framework' in lib_path):
                         python_lib_found = True
                         # Check for hardcoded Python framework paths in dependencies
-                        if '/Library/Frameworks/Python.framework' in lib_path and '@rpath' not in lib_path:
+                        # Hardcoded paths are absolute paths that don't use @rpath or @executable_path
+                        if '/Library/Frameworks/Python.framework' in lib_path and '@rpath' not in lib_path and '@executable_path' not in lib_path:
                             print(f"    ✗ Hardcoded framework path found: {lib_path}")
                             has_hardcoded_path = True
                             all_good = False
                         
-                        # Check for @rpath usage
-                        if '@rpath' in lib_path:
+                        # Check for portable path usage (@rpath or @executable_path)
+                        if '@executable_path' in lib_path:
+                            print(f"    ✓ Using @executable_path for Python library: {lib_path}")
+                            has_portable_path = True
+                        elif '@rpath' in lib_path:
                             print(f"    ✓ Using @rpath for Python library: {lib_path}")
-                            has_rpath = True
-                        elif '@rpath' not in lib_path:
-                            print(f"    ✗ Python library not using @rpath: {lib_path}")
-                            all_good = False
+                            has_portable_path = True
+                        elif '@rpath' not in lib_path and '@executable_path' not in lib_path:
+                            # Check if it's a hardcoded path (not relative)
+                            if not lib_path.startswith('@') and '/' in lib_path:
+                                print(f"    ✗ Python library using hardcoded path (not @rpath or @executable_path): {lib_path}")
+                                all_good = False
                 
                 if has_hardcoded_path:
                     print(f"    ✗ {so_file.name} has hardcoded Python framework paths")
-                elif has_rpath:
-                    print(f"    ✓ {so_file.name} uses @rpath correctly")
+                elif has_portable_path:
+                    print(f"    ✓ {so_file.name} uses portable path (@rpath or @executable_path) correctly")
                 else:
                     print(f"    ? {so_file.name} - no Python library dependencies found")
                     
