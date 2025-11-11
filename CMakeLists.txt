@@ -21,16 +21,18 @@ set(PYTHON_LIBRARY_FROM_USER_FLAGS "${PYTHON_LIBRARY}")
 if(PYTHON_EXECUTABLE AND APPLE)
     # First, get Python version to verify we're using the right Python
     execute_process(
-        COMMAND ${PYTHON_EXECUTABLE} -c "import sys; print('{}.{}'.format(sys.version_info.major, sys.version_info.minor))"
+        COMMAND ${PYTHON_EXECUTABLE} -c "import sys; print(str(sys.version_info.major) + '.' + str(sys.version_info.minor))"
         OUTPUT_VARIABLE PYTHON_VERSION_FROM_EXE
         OUTPUT_STRIP_TRAILING_WHITESPACE
         ERROR_QUIET
     )
-    message(STATUS "Python version from PYTHON_EXECUTABLE: ${PYTHON_VERSION_FROM_EXE}")
+    if(PYTHON_VERSION_FROM_EXE)
+        message(STATUS "Python version from PYTHON_EXECUTABLE: ${PYTHON_VERSION_FROM_EXE}")
+    endif()
     
     # Get Python library path
     execute_process(
-        COMMAND ${PYTHON_EXECUTABLE} -c "import sysconfig; libdir = sysconfig.get_config_var('LIBDIR'); libfile = sysconfig.get_config_var('LIBRARY'); libpath = '{}/{}'.format(libdir, libfile) if libfile else libdir; print(libpath)"
+        COMMAND ${PYTHON_EXECUTABLE} -c "import sysconfig; libdir = sysconfig.get_config_var('LIBDIR'); libfile = sysconfig.get_config_var('LIBRARY'); libpath = libdir + '/' + libfile if libfile else libdir; print(libpath)"
         OUTPUT_VARIABLE PYTHON_LIB_FROM_EXE
         OUTPUT_STRIP_TRAILING_WHITESPACE
         ERROR_QUIET
@@ -46,11 +48,11 @@ if(PYTHON_EXECUTABLE AND APPLE)
             message(STATUS "Overriding PYTHON_LIBRARY_FROM_USER_FLAGS with library from PYTHON_EXECUTABLE: ${PYTHON_LIBRARY_FROM_USER_FLAGS}")
         else
             message(WARNING "Python library file not found at: ${PYTHON_LIB_FROM_EXE}")
-            message(WARNING "This may cause linking issues. The post-build fix script will attempt to correct this.")
+            message(WARNING "Post-build fix script will attempt to correct this.")
         endif()
     else
         message(WARNING "Could not determine Python library path from PYTHON_EXECUTABLE")
-        message(WARNING "This may cause linking issues. The post-build fix script will attempt to correct this.")
+        message(WARNING "Post-build fix script will attempt to correct this.")
     endif()
 endif()
 
