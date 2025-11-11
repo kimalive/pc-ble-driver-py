@@ -108,25 +108,62 @@ for SO_FILE in $SO_FILES; do
                 }
             fi
         done
+        FIXED_ANY=1
+    fi
+    
+    # ALWAYS check and fix RPATH (even if library link is already correct)
+    # Get Python library directory from the Python executable
+    PYTHON_LIB_DIR=$($PYTHON_EXE -c "import sysconfig; libdir = sysconfig.get_config_var('LIBDIR'); print(libdir)" 2>/dev/null || echo "")
+    
+    if [ -n "$PYTHON_LIB_DIR" ] && [ -d "$PYTHON_LIB_DIR" ]; then
+        # Get current RPATH entries - extract path from LC_RPATH commands
+        # Format: LC_RPATH section has "path <path>" on the line after "cmdsize"
+        CURRENT_RPATHS=$(otool -l "$SO_FILE" 2>/dev/null | awk '/LC_RPATH/{found=1; next} found && /path /{print $2; found=0}' || true)
         
-        # Ensure Python library directory is in rpath
-        if [ -f "$PYTHON_LIB_INFO" ]; then
-            PYTHON_LIB_DIR=$(dirname "$PYTHON_LIB_INFO")
-            CURRENT_RPATHS=$(otool -l "$SO_FILE" 2>/dev/null | awk '/LC_RPATH/{getline; getline; if(/path/) print $2}' || true)
-            
-            if ! echo "$CURRENT_RPATHS" | grep -q "$PYTHON_LIB_DIR"; then
-                echo "    Adding rpath: $PYTHON_LIB_DIR"
-                install_name_tool -add_rpath "$PYTHON_LIB_DIR" "$SO_FILE" 2>/dev/null || {
-                    echo "    ⚠️  Warning: Failed to add rpath"
-                }
-            fi
+        # Check if correct Python library directory is in RPATH
+        RPATH_EXISTS=0
+        if [ -n "$CURRENT_RPATHS" ]; then
+            while IFS= read -r RPATH_ENTRY; do
+                if [ "$RPATH_ENTRY" = "$PYTHON_LIB_DIR" ]; then
+                    RPATH_EXISTS=1
+                    break
+                fi
+            done <<< "$CURRENT_RPATHS"
         fi
         
-        # Verify fix
+        if [ $RPATH_EXISTS -eq 0 ]; then
+            echo "  Adding rpath: $PYTHON_LIB_DIR"
+            install_name_tool -add_rpath "$PYTHON_LIB_DIR" "$SO_FILE" 2>/dev/null || {
+                echo "  ⚠️  Warning: Failed to add rpath"
+            }
+            FIXED_ANY=1
+        fi
+        
+        # Remove incorrect hardcoded RPATH entries from GitHub Actions (if they exist and are wrong)
+        if [ -n "$CURRENT_RPATHS" ]; then
+            while IFS= read -r RPATH_ENTRY; do
+                # Remove hardcoded paths that don't match the current Python installation
+                if [[ "$RPATH_ENTRY" == /Library/Frameworks/Python.framework* ]] || \
+                   [[ "$RPATH_ENTRY" == /Users/runner/hostedtoolcache* ]]; then
+                    if [ "$RPATH_ENTRY" != "$PYTHON_LIB_DIR" ]; then
+                        echo "  Removing incorrect rpath: $RPATH_ENTRY"
+                        install_name_tool -delete_rpath "$RPATH_ENTRY" "$SO_FILE" 2>/dev/null || {
+                            echo "  ⚠️  Warning: Failed to remove rpath (may not exist)"
+                        }
+                        FIXED_ANY=1
+                    fi
+                fi
+            done <<< "$CURRENT_RPATHS"
+        fi
+    else
+        echo "  ⚠️  Warning: Could not determine Python library directory"
+    fi
+    
+    # Verify fix
+    if [ $NEEDS_FIX -eq 1 ] || [ $FIXED_ANY -eq 1 ]; then
         VERIFIED_LINKS=$(otool -L "$SO_FILE" 2>/dev/null | grep -E "(python|Python)" | awk '{print $1}' || true)
         if echo "$VERIFIED_LINKS" | grep -q "$EXPECTED_RPATH"; then
             echo "  ✓ Fixed successfully"
-            FIXED_ANY=1
         else
             echo "  ✗ Fix verification failed"
             echo "    Current links: $VERIFIED_LINKS"
