@@ -172,11 +172,16 @@ for SO_FILE in $SO_FILES; do
             echo "  Adding rpath: $PYTHON_LIB_DIR"
             # Always try to add the RPATH, even if the directory doesn't exist yet
             # (it will exist at runtime when Python is installed)
-            install_name_tool -add_rpath "$PYTHON_LIB_DIR" "$SO_FILE" 2>/dev/null || {
-                echo "  ⚠️  Warning: Failed to add rpath: $PYTHON_LIB_DIR"
-                echo "    This may be normal if the directory doesn't exist in the build environment"
-            }
-            FIXED_ANY=1
+            if install_name_tool -add_rpath "$PYTHON_LIB_DIR" "$SO_FILE" 2>&1; then
+                echo "  ✓ Successfully added rpath"
+                FIXED_ANY=1
+            else
+                echo "  ✗ ERROR: Failed to add rpath: $PYTHON_LIB_DIR"
+                echo "    This is a critical error - the wheel will not work correctly"
+                echo "    Attempting to continue, but the wheel may be broken"
+                # Don't exit here - we want to see all errors for all .so files
+                FIXED_ANY=1  # Still mark as fixed so wheel gets recreated
+            fi
         fi
         
         # Remove incorrect hardcoded RPATH entries from GitHub Actions (if they exist and are wrong)
@@ -204,7 +209,11 @@ for SO_FILE in $SO_FILES; do
             done <<< "$CURRENT_RPATHS"
         fi
     else
-        echo "  ⚠️  Warning: Could not determine Python library directory"
+        echo "  ✗ ERROR: Could not determine Python library directory"
+        echo "    Python executable: $PYTHON_EXE"
+        echo "    This is a critical error - the wheel will not work correctly"
+        echo "    Attempting to continue, but the wheel may be broken"
+        # Don't exit here - we want to see all errors for all .so files
     fi
     
     # Verify fix
@@ -249,6 +258,25 @@ SO_FILE=$(find "$TEMP_DIR2" -name "*.so" -type f | head -1)
 if [ -n "$SO_FILE" ]; then
     echo "Final Python library links:"
     otool -L "$SO_FILE" 2>/dev/null | grep -E "(python|Python)" || echo "  None found"
+    echo ""
+    echo "Final RPATH entries:"
+    RPATH_ENTRIES=$(otool -l "$SO_FILE" 2>/dev/null | awk '/LC_RPATH/{found=1; next} found && /path /{print $2; found=0}' | grep -v "@loader_path" || true)
+    if [ -n "$RPATH_ENTRIES" ]; then
+        echo "$RPATH_ENTRIES" | while IFS= read -r rpath; do
+            echo "  $rpath"
+        done
+    else
+        echo "  ⚠️  WARNING: No RPATH entries found (only @loader_path)"
+        echo "     The wheel may not work correctly if Python executable doesn't have RPATH"
+    fi
 fi
 rm -rf "$TEMP_DIR2"
+
+# Final check: If we couldn't determine Python library directory for any .so file, fail
+if [ -z "$PYTHON_LIB_DIR" ] && [ $FIXED_ANY -eq 0 ]; then
+    echo ""
+    echo "✗ ERROR: Could not determine Python library directory and no fixes were applied"
+    echo "  This wheel will not work correctly"
+    exit 1
+fi
 

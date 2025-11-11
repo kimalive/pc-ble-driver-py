@@ -352,9 +352,39 @@ jobs:
           if [ -n "$WHEEL" ] && [ -f "$WHEEL" ]; then
             echo "Fixing Python library linking in: $(basename $WHEEL)"
             PYTHON_EXE=$(which python)
-            bash ${{ github.workspace }}/fix_wheel_python_linking.sh "$WHEEL" "$PYTHON_EXE"
+            echo "Using Python executable: $PYTHON_EXE"
+            echo "Python version: $($PYTHON_EXE --version 2>&1)"
+            if bash ${{ github.workspace }}/fix_wheel_python_linking.sh "$WHEEL" "$PYTHON_EXE"; then
+              echo "✓ Fix script completed successfully"
+              # Verify the fix was applied
+              echo "Verifying RPATH was added..."
+              TEMP_VERIFY=$(mktemp -d)
+              unzip -q "$WHEEL" -d "$TEMP_VERIFY" 2>/dev/null
+              SO_FILE=$(find "$TEMP_VERIFY" -name "*.so" -type f | head -1)
+              if [ -n "$SO_FILE" ]; then
+                PYTHON_LIB_DIR=$($PYTHON_EXE -c "import sysconfig; print(sysconfig.get_config_var('LIBDIR'))" 2>/dev/null || echo "")
+                if [ -n "$PYTHON_LIB_DIR" ]; then
+                  RPATH_FOUND=$(otool -l "$SO_FILE" 2>/dev/null | awk '/LC_RPATH/{found=1; next} found && /path /{print $2; found=0}' | grep -F "$PYTHON_LIB_DIR" || echo "")
+                  if [ -n "$RPATH_FOUND" ]; then
+                    echo "✓ Verified: RPATH contains Python library directory: $PYTHON_LIB_DIR"
+                  else
+                    echo "✗ ERROR: RPATH verification failed - Python library directory not found in RPATH"
+                    echo "  Expected: $PYTHON_LIB_DIR"
+                    echo "  Current RPATH entries:"
+                    otool -l "$SO_FILE" 2>/dev/null | awk '/LC_RPATH/{found=1; next} found && /path /{print "    " $2; found=0}'
+                    rm -rf "$TEMP_VERIFY"
+                    exit 1
+                  fi
+                fi
+              fi
+              rm -rf "$TEMP_VERIFY"
+            else
+              echo "✗ Fix script failed with exit code $?"
+              exit 1
+            fi
           else
             echo "⚠️  No wheel found to fix"
+            exit 1
           fi
 
       - name: Test wheel after build (segfault check only)
@@ -779,9 +809,39 @@ jobs:
           if [ -n "$WHEEL" ] && [ -f "$WHEEL" ]; then
             echo "Fixing Python library linking in: $(basename $WHEEL)"
             PYTHON_EXE=$(which python)
-            bash ${{ github.workspace }}/fix_wheel_python_linking.sh "$WHEEL" "$PYTHON_EXE"
+            echo "Using Python executable: $PYTHON_EXE"
+            echo "Python version: $($PYTHON_EXE --version 2>&1)"
+            if bash ${{ github.workspace }}/fix_wheel_python_linking.sh "$WHEEL" "$PYTHON_EXE"; then
+              echo "✓ Fix script completed successfully"
+              # Verify the fix was applied
+              echo "Verifying RPATH was added..."
+              TEMP_VERIFY=$(mktemp -d)
+              unzip -q "$WHEEL" -d "$TEMP_VERIFY" 2>/dev/null
+              SO_FILE=$(find "$TEMP_VERIFY" -name "*.so" -type f | head -1)
+              if [ -n "$SO_FILE" ]; then
+                PYTHON_LIB_DIR=$($PYTHON_EXE -c "import sysconfig; print(sysconfig.get_config_var('LIBDIR'))" 2>/dev/null || echo "")
+                if [ -n "$PYTHON_LIB_DIR" ]; then
+                  RPATH_FOUND=$(otool -l "$SO_FILE" 2>/dev/null | awk '/LC_RPATH/{found=1; next} found && /path /{print $2; found=0}' | grep -F "$PYTHON_LIB_DIR" || echo "")
+                  if [ -n "$RPATH_FOUND" ]; then
+                    echo "✓ Verified: RPATH contains Python library directory: $PYTHON_LIB_DIR"
+                  else
+                    echo "✗ ERROR: RPATH verification failed - Python library directory not found in RPATH"
+                    echo "  Expected: $PYTHON_LIB_DIR"
+                    echo "  Current RPATH entries:"
+                    otool -l "$SO_FILE" 2>/dev/null | awk '/LC_RPATH/{found=1; next} found && /path /{print "    " $2; found=0}'
+                    rm -rf "$TEMP_VERIFY"
+                    exit 1
+                  fi
+                fi
+              fi
+              rm -rf "$TEMP_VERIFY"
+            else
+              echo "✗ Fix script failed with exit code $?"
+              exit 1
+            fi
           else
             echo "⚠️  No wheel found to fix"
+            exit 1
           fi
 
       - name: Test wheel after build (segfault check only)
