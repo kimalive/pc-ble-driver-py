@@ -18,41 +18,23 @@ set(PYTHON_LIBRARY_FROM_USER_FLAGS "${PYTHON_LIBRARY}")
 # CRITICAL: If PYTHON_EXECUTABLE is provided, determine the correct Python library from it
 # This overrides PYTHON_LIBRARY_FROM_USER_FLAGS which might point to the wrong Python version
 # (e.g., Python 3.13 when building for Python 3.8)
+# Note: The post-build fix script (fix_wheel_python_linking.sh) will correct any linking issues
+# if the library detection here fails, so we make this optional to avoid CMake parse errors
 if(PYTHON_EXECUTABLE AND APPLE)
-    # First, get Python version to verify we're using the right Python
+    # Try to get Python library path - if this fails, the post-build script will fix it
+    # Use a simpler approach to avoid CMake quote parsing issues
     execute_process(
-        COMMAND ${PYTHON_EXECUTABLE} -c "import sys; print(str(sys.version_info.major) + '.' + str(sys.version_info.minor))"
-        OUTPUT_VARIABLE PYTHON_VERSION_FROM_EXE
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        ERROR_QUIET
-    )
-    if(PYTHON_VERSION_FROM_EXE)
-        message(STATUS "Python version from PYTHON_EXECUTABLE: ${PYTHON_VERSION_FROM_EXE}")
-    endif()
-    
-    # Get Python library path
-    execute_process(
-        COMMAND ${PYTHON_EXECUTABLE} -c "import sysconfig; libdir = sysconfig.get_config_var('LIBDIR'); libfile = sysconfig.get_config_var('LIBRARY'); libpath = libdir + '/' + libfile if libfile else libdir; print(libpath)"
+        COMMAND ${PYTHON_EXECUTABLE} -c "import sysconfig; print(sysconfig.get_config_var('LIBDIR') + '/' + sysconfig.get_config_var('LIBRARY') if sysconfig.get_config_var('LIBRARY') else sysconfig.get_config_var('LIBDIR'))"
         OUTPUT_VARIABLE PYTHON_LIB_FROM_EXE
         OUTPUT_STRIP_TRAILING_WHITESPACE
         ERROR_QUIET
     )
     
-    if(PYTHON_LIB_FROM_EXE)
-        message(STATUS "Python library path from PYTHON_EXECUTABLE: ${PYTHON_LIB_FROM_EXE}")
-        
-        # Check if the library file exists
-        if(EXISTS "${PYTHON_LIB_FROM_EXE}")
-            # Override PYTHON_LIBRARY_FROM_USER_FLAGS with the correct library from PYTHON_EXECUTABLE
-            set(PYTHON_LIBRARY_FROM_USER_FLAGS "${PYTHON_LIB_FROM_EXE}")
-            message(STATUS "Overriding PYTHON_LIBRARY_FROM_USER_FLAGS with library from PYTHON_EXECUTABLE: ${PYTHON_LIBRARY_FROM_USER_FLAGS}")
-        else
-            message(WARNING "Python library file not found at: ${PYTHON_LIB_FROM_EXE}")
-            message(WARNING "Post-build fix script will attempt to correct this.")
-        endif()
+    if(PYTHON_LIB_FROM_EXE AND EXISTS "${PYTHON_LIB_FROM_EXE}")
+        set(PYTHON_LIBRARY_FROM_USER_FLAGS "${PYTHON_LIB_FROM_EXE}")
+        message(STATUS "Using Python library from PYTHON_EXECUTABLE: ${PYTHON_LIBRARY_FROM_USER_FLAGS}")
     else
-        message(WARNING "Could not determine Python library path from PYTHON_EXECUTABLE")
-        message(WARNING "Post-build fix script will attempt to correct this.")
+        message(STATUS "Python library detection skipped - post-build fix script will handle linking")
     endif()
 endif()
 
@@ -272,7 +254,7 @@ foreach(SD_API_VER ${SD_API_VERS})
         if(PYTHON_EXECUTABLE)
             # Use Python to determine its own library path and version
             execute_process(
-                COMMAND ${PYTHON_EXECUTABLE} -c "import sysconfig; import sys; libdir = sysconfig.get_config_var('LIBDIR'); libfile = sysconfig.get_config_var('LIBRARY'); libpath = f'{libdir}/{libfile}' if libfile else libdir; print(libpath); print(f'{sys.version_info.major}.{sys.version_info.minor}')"
+                COMMAND ${PYTHON_EXECUTABLE} -c "import sysconfig; import sys; libdir = sysconfig.get_config_var('LIBDIR'); libfile = sysconfig.get_config_var('LIBRARY'); libpath = libdir + '/' + libfile if libfile else libdir; print(libpath); print(str(sys.version_info.major) + '.' + str(sys.version_info.minor))"
                 OUTPUT_VARIABLE PYTHON_LIB_INFO
                 OUTPUT_STRIP_TRAILING_WHITESPACE
                 ERROR_QUIET
