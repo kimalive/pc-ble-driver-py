@@ -117,7 +117,8 @@ for SO_FILE in $SO_FILES; do
     PYTHON_LIB_DIR=$($PYTHON_EXE -c "import sysconfig; libdir = sysconfig.get_config_var('LIBDIR'); print(libdir)" 2>/dev/null || echo "")
     
     # If LIBDIR is empty or doesn't exist, try multiple fallback methods
-    if [ -z "$PYTHON_LIB_DIR" ] || [ ! -d "$PYTHON_LIB_DIR" ]; then
+    # Note: We still add the path to RPATH even if directory doesn't exist (it will exist at runtime)
+    if [ -z "$PYTHON_LIB_DIR" ]; then
         # Method 1: Try to determine from Python executable path (for pyenv, Homebrew, etc.)
         PYTHON_ROOT=$(dirname "$(dirname "$PYTHON_EXE")")
         if [ -d "$PYTHON_ROOT/lib" ]; then
@@ -125,24 +126,30 @@ for SO_FILE in $SO_FILES; do
         # Method 2: For GitHub Actions hostedtoolcache, try standard structure
         elif [[ "$PYTHON_EXE" == *"/hostedtoolcache/Python/"* ]]; then
             # Extract Python version and path from hostedtoolcache structure
-            # e.g., /Users/runner/hostedtoolcache/Python/3.10.18/arm64/bin/python
+            # e.g., /Users/runner/hostedtoolcache/Python/3.10.18/arm64/bin/python -> /Users/runner/hostedtoolcache/Python/3.10.18/arm64/lib
             PYTHON_TOOLCACHE_DIR=$(echo "$PYTHON_EXE" | sed 's|/bin/python.*|/lib|')
-            if [ -d "$PYTHON_TOOLCACHE_DIR" ]; then
-                PYTHON_LIB_DIR="$PYTHON_TOOLCACHE_DIR"
-            else
-                # Even if directory doesn't exist, use the expected path (it will exist at runtime)
-                PYTHON_LIB_DIR="$PYTHON_TOOLCACHE_DIR"
-            fi
+            PYTHON_LIB_DIR="$PYTHON_TOOLCACHE_DIR"
         # Method 3: Try Python framework structure (Homebrew)
         elif [[ "$PYTHON_EXE" == *"/Frameworks/Python.framework/"* ]]; then
-            PYTHON_FRAMEWORK_LIB=$(echo "$PYTHON_EXE" | sed 's|/Frameworks/Python.framework/Versions/[^/]*/bin/python.*|/Frameworks/Python.framework/Versions/|' | sed 's|/bin/python.*|/lib|')
-            if [ -d "$PYTHON_FRAMEWORK_LIB" ]; then
-                PYTHON_LIB_DIR="$PYTHON_FRAMEWORK_LIB"
+            # Extract framework lib path
+            # e.g., /opt/homebrew/.../Frameworks/Python.framework/Versions/3.10/bin/python -> .../Versions/3.10/lib
+            PYTHON_FRAMEWORK_LIB=$(echo "$PYTHON_EXE" | sed 's|/Frameworks/Python.framework/Versions/[^/]*/bin/python.*|/Frameworks/Python.framework/Versions/|')
+            PYTHON_FRAMEWORK_LIB=$(echo "$PYTHON_FRAMEWORK_LIB" | sed 's|/bin/python.*|/lib|')
+            # Try to extract version from path and construct proper path
+            if [[ "$PYTHON_EXE" =~ /Versions/([0-9]+\.[0-9]+)/ ]]; then
+                PYTHON_VER="${BASH_REMATCH[1]}"
+                PYTHON_FRAMEWORK_BASE=$(echo "$PYTHON_EXE" | sed 's|/Frameworks/Python.framework/Versions/[^/]*/.*||')
+                PYTHON_LIB_DIR="${PYTHON_FRAMEWORK_BASE}/Frameworks/Python.framework/Versions/${PYTHON_VER}/lib"
             else
-                # Use sysconfig's LIBDIR even if it doesn't exist (it will exist at runtime)
-                PYTHON_LIB_DIR=$($PYTHON_EXE -c "import sysconfig; print(sysconfig.get_config_var('LIBDIR'))" 2>/dev/null || echo "")
+                PYTHON_LIB_DIR="$PYTHON_FRAMEWORK_LIB"
             fi
         fi
+    fi
+    
+    # If we still don't have a lib dir, try one more time with sysconfig
+    # (even if directory doesn't exist, we'll use it for RPATH - it will exist at runtime)
+    if [ -z "$PYTHON_LIB_DIR" ]; then
+        PYTHON_LIB_DIR=$($PYTHON_EXE -c "import sysconfig; print(sysconfig.get_config_var('LIBDIR'))" 2>/dev/null || echo "")
     fi
     
     # Final fallback: use sysconfig LIBDIR even if directory doesn't exist
