@@ -142,11 +142,19 @@ for SO_FILE in $SO_FILES; do
         # Remove incorrect hardcoded RPATH entries from GitHub Actions (if they exist and are wrong)
         if [ -n "$CURRENT_RPATHS" ]; then
             while IFS= read -r RPATH_ENTRY; do
-                # Remove hardcoded paths that don't match the current Python installation
-                if [[ "$RPATH_ENTRY" == /Library/Frameworks/Python.framework* ]] || \
-                   [[ "$RPATH_ENTRY" == /Users/runner/hostedtoolcache* ]]; then
+                # ALWAYS remove /Library/Frameworks/Python.framework* paths - these are always wrong
+                # They come from the build environment and should never be in the final wheel
+                if [[ "$RPATH_ENTRY" == /Library/Frameworks/Python.framework* ]]; then
+                    echo "  Removing incorrect rpath (hardcoded framework path): $RPATH_ENTRY"
+                    install_name_tool -delete_rpath "$RPATH_ENTRY" "$SO_FILE" 2>/dev/null || {
+                        echo "  ⚠️  Warning: Failed to remove rpath (may not exist)"
+                    }
+                    FIXED_ANY=1
+                # Remove /Users/runner/hostedtoolcache* paths only if they don't match current Python
+                # (In GitHub Actions, the correct path IS in hostedtoolcache, so we keep it if it matches)
+                elif [[ "$RPATH_ENTRY" == /Users/runner/hostedtoolcache* ]]; then
                     if [ "$RPATH_ENTRY" != "$PYTHON_LIB_DIR" ]; then
-                        echo "  Removing incorrect rpath: $RPATH_ENTRY"
+                        echo "  Removing incorrect rpath (wrong hostedtoolcache path): $RPATH_ENTRY"
                         install_name_tool -delete_rpath "$RPATH_ENTRY" "$SO_FILE" 2>/dev/null || {
                             echo "  ⚠️  Warning: Failed to remove rpath (may not exist)"
                         }

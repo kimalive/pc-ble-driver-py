@@ -341,7 +341,11 @@ jobs:
           # Find the wheel that was just built
           PYTHON_TAG="cp${{ matrix.python-version }}"
           PYTHON_TAG=$(echo "$PYTHON_TAG" | sed 's/\.//g')
-          WHEEL=$(ls -t dist/pc_ble_driver_py-*-${PYTHON_TAG}-abi3-*x86_64*.whl 2>/dev/null | head -1)
+          # Try both patterns: with underscore (_x86_64) and with hyphen (-x86_64)
+          WHEEL=$(ls -t dist/pc_ble_driver_py-*-${PYTHON_TAG}-abi3-*_x86_64.whl 2>/dev/null | head -1)
+          if [ -z "$WHEEL" ]; then
+            WHEEL=$(ls -t dist/pc_ble_driver_py-*-${PYTHON_TAG}-abi3-*-x86_64*.whl 2>/dev/null | head -1)
+          fi
           if [ -z "$WHEEL" ]; then
             WHEEL=$(ls -t dist/pc_ble_driver_py-*-*x86_64*.whl 2>/dev/null | head -1)
           fi
@@ -751,7 +755,11 @@ jobs:
           # Find the wheel that was just built
           PYTHON_TAG="cp${{ matrix.python-version }}"
           PYTHON_TAG=$(echo "$PYTHON_TAG" | sed 's/\.//g')
-          WHEEL=$(ls -t dist/pc_ble_driver_py-*-${PYTHON_TAG}-abi3-*arm64*.whl 2>/dev/null | head -1)
+          # Try both patterns: with underscore (_arm64) and with hyphen (-arm64)
+          WHEEL=$(ls -t dist/pc_ble_driver_py-*-${PYTHON_TAG}-abi3-*_arm64.whl 2>/dev/null | head -1)
+          if [ -z "$WHEEL" ]; then
+            WHEEL=$(ls -t dist/pc_ble_driver_py-*-${PYTHON_TAG}-abi3-*-arm64*.whl 2>/dev/null | head -1)
+          fi
           if [ -z "$WHEEL" ]; then
             WHEEL=$(ls -t dist/pc_ble_driver_py-*-*arm64*.whl 2>/dev/null | head -1)
           fi

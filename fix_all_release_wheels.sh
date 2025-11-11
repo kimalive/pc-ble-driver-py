@@ -18,18 +18,25 @@ SKIPPED=0
 
 for py_ver in "${PYTHON_VERSIONS[@]}"; do
     # Find Python executable
+    # Prefer pyenv/python from PATH first, then Homebrew, then system
     PYTHON_EXE=""
-    for path in "/opt/homebrew/bin/python${py_ver}" "/usr/local/bin/python${py_ver}" "$(which python${py_ver} 2>/dev/null)"; do
-        if [[ -f "$path" ]] || command -v "$path" >/dev/null 2>&1; then
-            # If it's a pyenv shim, resolve to actual Python executable
-            if [[ "$path" == *"/.pyenv/shims/"* ]]; then
-                PYTHON_EXE=$(python${py_ver} -c "import sys; print(sys.executable)" 2>/dev/null || echo "$path")
-            else
-                PYTHON_EXE="$path"
-            fi
-            break
+    # Try which first (will find pyenv shims if in PATH)
+    if command -v python${py_ver} >/dev/null 2>&1; then
+        PYTHON_EXE=$(which python${py_ver})
+        # If it's a pyenv shim, resolve to actual Python executable
+        if [[ "$PYTHON_EXE" == *"/.pyenv/shims/"* ]]; then
+            PYTHON_EXE=$(python${py_ver} -c "import sys; print(sys.executable)" 2>/dev/null || echo "$PYTHON_EXE")
         fi
-    done
+    fi
+    # Fallback to common locations
+    if [ -z "$PYTHON_EXE" ] || [ ! -f "$PYTHON_EXE" ]; then
+        for path in "/opt/homebrew/bin/python${py_ver}" "/usr/local/bin/python${py_ver}"; do
+            if [[ -f "$path" ]]; then
+                PYTHON_EXE="$path"
+                break
+            fi
+        done
+    fi
     
     if [ -z "$PYTHON_EXE" ] || [ ! -f "$PYTHON_EXE" ]; then
         echo "⚠️  Python ${py_ver} not found, skipping wheel fix"
@@ -41,7 +48,11 @@ for py_ver in "${PYTHON_VERSIONS[@]}"; do
     # Remove the dot from version: 3.8 -> 38, 3.10 -> 310, 3.13 -> 313
     py_tag="cp${py_ver//./}"
     
-    WHEEL=$(ls dist/pc_ble_driver_py-0.17.11-${py_tag}-abi3-*arm64*.whl 2>/dev/null | head -1)
+    # Try both patterns: with underscore (_arm64) and with hyphen (-arm64)
+    WHEEL=$(ls dist/pc_ble_driver_py-0.17.11-${py_tag}-abi3-*_arm64.whl 2>/dev/null | head -1)
+    if [ -z "$WHEEL" ] || [ ! -f "$WHEEL" ]; then
+        WHEEL=$(ls dist/pc_ble_driver_py-0.17.11-${py_tag}-abi3-*-arm64*.whl 2>/dev/null | head -1)
+    fi
     
     if [ -z "$WHEEL" ] || [ ! -f "$WHEEL" ]; then
         echo "⚠️  Wheel not found for Python ${py_ver} (${py_tag})"
