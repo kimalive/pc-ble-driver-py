@@ -36,24 +36,27 @@ if [ -z "$PYTHON_LIB_INFO" ]; then
     exit 1
 fi
 
-# Determine expected @rpath name
-if [ -f "$PYTHON_LIB_INFO" ]; then
-    PYTHON_LIB_NAME=$(basename "$PYTHON_LIB_INFO")
-    if [[ "$PYTHON_LIB_NAME" =~ libpython([0-9]+\.[0-9]+)\.dylib ]]; then
-        EXPECTED_RPATH="@rpath/libpython${BASH_REMATCH[1]}.dylib"
-    elif [ "$PYTHON_LIB_NAME" = "Python" ] || [[ "$PYTHON_LIB_INFO" =~ Python.framework ]]; then
-        EXPECTED_RPATH="@rpath/Python"
+    # Determine expected library name - use @executable_path instead of @rpath for portability
+    # @executable_path is relative to the Python executable, so @executable_path/../lib/libpython3.X.dylib
+    # will always point to the correct Python library directory, regardless of installation location
+    if [ -f "$PYTHON_LIB_INFO" ]; then
+        PYTHON_LIB_NAME=$(basename "$PYTHON_LIB_INFO")
+        if [[ "$PYTHON_LIB_NAME" =~ libpython([0-9]+\.[0-9]+)\.dylib ]]; then
+            EXPECTED_RPATH="@executable_path/../lib/libpython${BASH_REMATCH[1]}.dylib"
+        elif [ "$PYTHON_LIB_NAME" = "Python" ] || [[ "$PYTHON_LIB_INFO" =~ Python.framework ]]; then
+            EXPECTED_RPATH="@executable_path/../lib/Python"
+        else
+            EXPECTED_RPATH="@executable_path/../lib/$PYTHON_LIB_NAME"
+        fi
     else
-        EXPECTED_RPATH="@rpath/$PYTHON_LIB_NAME"
+        # If library file doesn't exist, try to determine from version
+        EXPECTED_RPATH="@executable_path/../lib/libpython${PYTHON_VER}.dylib"
     fi
-else
-    # If library file doesn't exist, try to determine from version
-    EXPECTED_RPATH="@rpath/libpython${PYTHON_VER}.dylib"
-fi
 
 echo "Python version: $PYTHON_VER"
 echo "Python library: $PYTHON_LIB_INFO"
-echo "Expected @rpath: $EXPECTED_RPATH"
+echo "Expected library link: $EXPECTED_RPATH"
+echo "Note: Using @executable_path instead of @rpath for portability (no hardcoded paths needed)"
 echo ""
 
 # Extract wheel to temporary directory
@@ -85,12 +88,16 @@ for SO_FILE in $SO_FILES; do
     
     NEEDS_FIX=0
     for LINK in $CURRENT_LINKS; do
-        # Check if link is hardcoded path (not @rpath)
-        if [[ "$LINK" != @rpath* ]] && [[ "$LINK" != @loader_path* ]]; then
+        # Check if link is hardcoded path (not @executable_path, @rpath, or @loader_path)
+        if [[ "$LINK" != @executable_path* ]] && [[ "$LINK" != @rpath* ]] && [[ "$LINK" != @loader_path* ]]; then
             echo "  Found hardcoded path: $LINK"
             NEEDS_FIX=1
-        # Check if link is wrong @rpath version
-        elif [[ "$LINK" =~ @rpath/libpython([0-9]+\.[0-9]+)\.dylib ]] && [ "${BASH_REMATCH[1]}" != "$PYTHON_VER" ]; then
+        # Check if link is @rpath (we want to change this to @executable_path for portability)
+        elif [[ "$LINK" =~ @rpath/libpython([0-9]+\.[0-9]+)\.dylib ]]; then
+            echo "  Found @rpath link (will change to @executable_path for portability): $LINK"
+            NEEDS_FIX=1
+        # Check if link is wrong @executable_path version
+        elif [[ "$LINK" =~ @executable_path/../lib/libpython([0-9]+\.[0-9]+)\.dylib ]] && [ "${BASH_REMATCH[1]}" != "$PYTHON_VER" ]; then
             echo "  Found wrong Python version: $LINK (expected $PYTHON_VER)"
             NEEDS_FIX=1
         fi
@@ -111,122 +118,28 @@ for SO_FILE in $SO_FILES; do
         FIXED_ANY=1
     fi
     
-    # ALWAYS check and fix RPATH (even if library link is already correct)
-    # Get Python library directory from the Python executable
-    # CRITICAL: In GitHub Actions, sysconfig may return wrong path, so we prioritize executable path detection
+    # With @executable_path, we don't need RPATH at all!
+    # @executable_path is resolved relative to the Python executable that loads the .so file,
+    # so @executable_path/../lib/libpython3.X.dylib will always work regardless of where
+    # Python is installed (pyenv, Homebrew, GitHub Actions, system Python, etc.)
+    # 
+    # However, we should still remove any incorrect hardcoded RPATH entries that might
+    # have been added during the build process.
+    CURRENT_RPATHS=$(otool -l "$SO_FILE" 2>/dev/null | awk '/LC_RPATH/{found=1; next} found && /path /{print $2; found=0}' || true)
     
-    # Method 1: For GitHub Actions hostedtoolcache, detect from executable path FIRST
-    # This is the most reliable method in GitHub Actions
-    if [[ "$PYTHON_EXE" == *"/hostedtoolcache/Python/"* ]]; then
-        # Extract Python version and path from hostedtoolcache structure
-        # e.g., /Users/runner/hostedtoolcache/Python/3.10.11/arm64/bin/python -> /Users/runner/hostedtoolcache/Python/3.10.11/arm64/lib
-        PYTHON_TOOLCACHE_DIR=$(echo "$PYTHON_EXE" | sed 's|/bin/python.*|/lib|')
-        PYTHON_LIB_DIR="$PYTHON_TOOLCACHE_DIR"
-        echo "  Detected GitHub Actions hostedtoolcache Python - using: $PYTHON_LIB_DIR"
-    # Method 2: Try Python framework structure (Homebrew)
-    elif [[ "$PYTHON_EXE" == *"/Frameworks/Python.framework/"* ]]; then
-        # Extract framework lib path
-        # e.g., /opt/homebrew/.../Frameworks/Python.framework/Versions/3.10/bin/python -> .../Versions/3.10/lib
-        PYTHON_FRAMEWORK_LIB=$(echo "$PYTHON_EXE" | sed 's|/Frameworks/Python.framework/Versions/[^/]*/bin/python.*|/Frameworks/Python.framework/Versions/|')
-        PYTHON_FRAMEWORK_LIB=$(echo "$PYTHON_FRAMEWORK_LIB" | sed 's|/bin/python.*|/lib|')
-        # Try to extract version from path and construct proper path
-        if [[ "$PYTHON_EXE" =~ /Versions/([0-9]+\.[0-9]+)/ ]]; then
-            PYTHON_VER="${BASH_REMATCH[1]}"
-            PYTHON_FRAMEWORK_BASE=$(echo "$PYTHON_EXE" | sed 's|/Frameworks/Python.framework/Versions/[^/]*/.*||')
-            PYTHON_LIB_DIR="${PYTHON_FRAMEWORK_BASE}/Frameworks/Python.framework/Versions/${PYTHON_VER}/lib"
-        else
-            PYTHON_LIB_DIR="$PYTHON_FRAMEWORK_LIB"
-        fi
-        echo "  Detected Python framework - using: $PYTHON_LIB_DIR"
-    # Method 3: Try to determine from Python executable path (for pyenv, etc.)
-    else
-        PYTHON_ROOT=$(dirname "$(dirname "$PYTHON_EXE")")
-        if [ -d "$PYTHON_ROOT/lib" ]; then
-            PYTHON_LIB_DIR="$PYTHON_ROOT/lib"
-            echo "  Detected from executable path - using: $PYTHON_LIB_DIR"
-        fi
-    fi
-    
-    # Fallback: use sysconfig LIBDIR, but only if we haven't found it yet
-    # NOTE: In GitHub Actions, sysconfig may return wrong path, so this is last resort
-    if [ -z "$PYTHON_LIB_DIR" ]; then
-        PYTHON_LIB_DIR=$($PYTHON_EXE -c "import sysconfig; print(sysconfig.get_config_var('LIBDIR'))" 2>/dev/null || echo "")
-        if [ -n "$PYTHON_LIB_DIR" ]; then
-            echo "  Using sysconfig LIBDIR (fallback): $PYTHON_LIB_DIR"
-            # In GitHub Actions, sysconfig may return /Library/Frameworks path which is wrong
-            # Check if it's a framework path and we're in hostedtoolcache - if so, ignore it
-            if [[ "$PYTHON_LIB_DIR" == /Library/Frameworks* ]] && [[ "$PYTHON_EXE" == *"/hostedtoolcache/"* ]]; then
-                echo "  ⚠️  WARNING: sysconfig returned framework path but we're in hostedtoolcache"
-                echo "     Ignoring sysconfig result and using executable path instead"
-                PYTHON_TOOLCACHE_DIR=$(echo "$PYTHON_EXE" | sed 's|/bin/python.*|/lib|')
-                PYTHON_LIB_DIR="$PYTHON_TOOLCACHE_DIR"
-                echo "     Using: $PYTHON_LIB_DIR"
-            fi
-        fi
-    fi
-    
-    if [ -n "$PYTHON_LIB_DIR" ]; then
-        # Get current RPATH entries - extract path from LC_RPATH commands
-        # Format: LC_RPATH section has "path <path>" on the line after "cmdsize"
-        CURRENT_RPATHS=$(otool -l "$SO_FILE" 2>/dev/null | awk '/LC_RPATH/{found=1; next} found && /path /{print $2; found=0}' || true)
-        
-        # Check if correct Python library directory is in RPATH
-        RPATH_EXISTS=0
-        if [ -n "$CURRENT_RPATHS" ]; then
-            while IFS= read -r RPATH_ENTRY; do
-                if [ "$RPATH_ENTRY" = "$PYTHON_LIB_DIR" ]; then
-                    RPATH_EXISTS=1
-                    break
-                fi
-            done <<< "$CURRENT_RPATHS"
-        fi
-        
-        if [ $RPATH_EXISTS -eq 0 ]; then
-            echo "  Adding rpath: $PYTHON_LIB_DIR"
-            # Always try to add the RPATH, even if the directory doesn't exist yet
-            # (it will exist at runtime when Python is installed)
-            if install_name_tool -add_rpath "$PYTHON_LIB_DIR" "$SO_FILE" 2>&1; then
-                echo "  ✓ Successfully added rpath"
+    # Remove all hardcoded RPATH entries - they're not needed with @executable_path
+    # and they cause portability issues
+    if [ -n "$CURRENT_RPATHS" ]; then
+        while IFS= read -r RPATH_ENTRY; do
+            # Remove all hardcoded paths (not @loader_path or @executable_path)
+            if [[ "$RPATH_ENTRY" != @loader_path* ]] && [[ "$RPATH_ENTRY" != @executable_path* ]]; then
+                echo "  Removing hardcoded rpath (not needed with @executable_path): $RPATH_ENTRY"
+                install_name_tool -delete_rpath "$RPATH_ENTRY" "$SO_FILE" 2>/dev/null || {
+                    echo "  ⚠️  Warning: Failed to remove rpath (may not exist)"
+                }
                 FIXED_ANY=1
-            else
-                echo "  ✗ ERROR: Failed to add rpath: $PYTHON_LIB_DIR"
-                echo "    This is a critical error - the wheel will not work correctly"
-                echo "    Attempting to continue, but the wheel may be broken"
-                # Don't exit here - we want to see all errors for all .so files
-                FIXED_ANY=1  # Still mark as fixed so wheel gets recreated
             fi
-        fi
-        
-        # Remove incorrect hardcoded RPATH entries from GitHub Actions (if they exist and are wrong)
-        if [ -n "$CURRENT_RPATHS" ]; then
-            while IFS= read -r RPATH_ENTRY; do
-                # ALWAYS remove /Library/Frameworks/Python.framework* paths - these are always wrong
-                # They come from the build environment and should never be in the final wheel
-                if [[ "$RPATH_ENTRY" == /Library/Frameworks/Python.framework* ]]; then
-                    echo "  Removing incorrect rpath (hardcoded framework path): $RPATH_ENTRY"
-                    install_name_tool -delete_rpath "$RPATH_ENTRY" "$SO_FILE" 2>/dev/null || {
-                        echo "  ⚠️  Warning: Failed to remove rpath (may not exist)"
-                    }
-                    FIXED_ANY=1
-                # Remove /Users/runner/hostedtoolcache* paths only if they don't match current Python
-                # (In GitHub Actions, the correct path IS in hostedtoolcache, so we keep it if it matches)
-                elif [[ "$RPATH_ENTRY" == /Users/runner/hostedtoolcache* ]]; then
-                    if [ "$RPATH_ENTRY" != "$PYTHON_LIB_DIR" ]; then
-                        echo "  Removing incorrect rpath (wrong hostedtoolcache path): $RPATH_ENTRY"
-                        install_name_tool -delete_rpath "$RPATH_ENTRY" "$SO_FILE" 2>/dev/null || {
-                            echo "  ⚠️  Warning: Failed to remove rpath (may not exist)"
-                        }
-                        FIXED_ANY=1
-                    fi
-                fi
-            done <<< "$CURRENT_RPATHS"
-        fi
-    else
-        echo "  ✗ ERROR: Could not determine Python library directory"
-        echo "    Python executable: $PYTHON_EXE"
-        echo "    This is a critical error - the wheel will not work correctly"
-        echo "    Attempting to continue, but the wheel may be broken"
-        # Don't exit here - we want to see all errors for all .so files
+        done <<< "$CURRENT_RPATHS"
     fi
     
     # Verify fix
@@ -273,23 +186,21 @@ if [ -n "$SO_FILE" ]; then
     otool -L "$SO_FILE" 2>/dev/null | grep -E "(python|Python)" || echo "  None found"
     echo ""
     echo "Final RPATH entries:"
-    RPATH_ENTRIES=$(otool -l "$SO_FILE" 2>/dev/null | awk '/LC_RPATH/{found=1; next} found && /path /{print $2; found=0}' | grep -v "@loader_path" || true)
+    RPATH_ENTRIES=$(otool -l "$SO_FILE" 2>/dev/null | awk '/LC_RPATH/{found=1; next} found && /path /{print $2; found=0}' || true)
     if [ -n "$RPATH_ENTRIES" ]; then
         echo "$RPATH_ENTRIES" | while IFS= read -r rpath; do
-            echo "  $rpath"
+            if [[ "$rpath" == @loader_path* ]] || [[ "$rpath" == @executable_path* ]]; then
+                echo "  $rpath (OK - relative path)"
+            else
+                echo "  $rpath (WARNING - hardcoded path, should be removed)"
+            fi
         done
     else
-        echo "  ⚠️  WARNING: No RPATH entries found (only @loader_path)"
-        echo "     The wheel may not work correctly if Python executable doesn't have RPATH"
+        echo "  ✓ No RPATH entries needed (using @executable_path for Python library)"
     fi
 fi
 rm -rf "$TEMP_DIR2"
 
-# Final check: If we couldn't determine Python library directory for any .so file, fail
-if [ -z "$PYTHON_LIB_DIR" ] && [ $FIXED_ANY -eq 0 ]; then
-    echo ""
-    echo "✗ ERROR: Could not determine Python library directory and no fixes were applied"
-    echo "  This wheel will not work correctly"
-    exit 1
-fi
+# With @executable_path, we don't need to check for Python library directory
+# The library link @executable_path/../lib/libpython3.X.dylib will work automatically
 
