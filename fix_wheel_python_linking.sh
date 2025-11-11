@@ -146,12 +146,6 @@ for SO_FILE in $SO_FILES; do
         fi
     fi
     
-    # If we still don't have a lib dir, try one more time with sysconfig
-    # (even if directory doesn't exist, we'll use it for RPATH - it will exist at runtime)
-    if [ -z "$PYTHON_LIB_DIR" ]; then
-        PYTHON_LIB_DIR=$($PYTHON_EXE -c "import sysconfig; print(sysconfig.get_config_var('LIBDIR'))" 2>/dev/null || echo "")
-    fi
-    
     # Final fallback: use sysconfig LIBDIR even if directory doesn't exist
     # (it will exist at runtime when Python is installed on user's machine)
     if [ -z "$PYTHON_LIB_DIR" ]; then
