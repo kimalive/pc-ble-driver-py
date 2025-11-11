@@ -115,7 +115,17 @@ for SO_FILE in $SO_FILES; do
     # Get Python library directory from the Python executable
     PYTHON_LIB_DIR=$($PYTHON_EXE -c "import sysconfig; libdir = sysconfig.get_config_var('LIBDIR'); print(libdir)" 2>/dev/null || echo "")
     
-    if [ -n "$PYTHON_LIB_DIR" ] && [ -d "$PYTHON_LIB_DIR" ]; then
+    # In GitHub Actions, LIBDIR might not exist as a directory, but we still need to add it to RPATH
+    # The library will be found via @rpath resolution when the directory is in RPATH
+    if [ -z "$PYTHON_LIB_DIR" ]; then
+        # Fallback: try to determine from Python executable path
+        PYTHON_ROOT=$(dirname "$(dirname "$PYTHON_EXE")")
+        if [ -d "$PYTHON_ROOT/lib" ]; then
+            PYTHON_LIB_DIR="$PYTHON_ROOT/lib"
+        fi
+    fi
+    
+    if [ -n "$PYTHON_LIB_DIR" ]; then
         # Get current RPATH entries - extract path from LC_RPATH commands
         # Format: LC_RPATH section has "path <path>" on the line after "cmdsize"
         CURRENT_RPATHS=$(otool -l "$SO_FILE" 2>/dev/null | awk '/LC_RPATH/{found=1; next} found && /path /{print $2; found=0}' || true)
@@ -133,8 +143,11 @@ for SO_FILE in $SO_FILES; do
         
         if [ $RPATH_EXISTS -eq 0 ]; then
             echo "  Adding rpath: $PYTHON_LIB_DIR"
+            # Always try to add the RPATH, even if the directory doesn't exist yet
+            # (it will exist at runtime when Python is installed)
             install_name_tool -add_rpath "$PYTHON_LIB_DIR" "$SO_FILE" 2>/dev/null || {
-                echo "  ⚠️  Warning: Failed to add rpath"
+                echo "  ⚠️  Warning: Failed to add rpath: $PYTHON_LIB_DIR"
+                echo "    This may be normal if the directory doesn't exist in the build environment"
             }
             FIXED_ANY=1
         fi
