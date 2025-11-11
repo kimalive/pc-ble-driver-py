@@ -362,7 +362,22 @@ jobs:
               unzip -q "$WHEEL" -d "$TEMP_VERIFY" 2>/dev/null
               SO_FILE=$(find "$TEMP_VERIFY" -name "*.so" -type f | head -1)
               if [ -n "$SO_FILE" ]; then
-                PYTHON_LIB_DIR=$($PYTHON_EXE -c "import sysconfig; print(sysconfig.get_config_var('LIBDIR'))" 2>/dev/null || echo "")
+                # Use the same detection logic as the fix script
+                # CRITICAL: Don't use sysconfig in GitHub Actions - it returns wrong path
+                if [[ "$PYTHON_EXE" == *"/hostedtoolcache/Python/"* ]]; then
+                  PYTHON_LIB_DIR=$(echo "$PYTHON_EXE" | sed 's|/bin/python.*|/lib|')
+                elif [[ "$PYTHON_EXE" == *"/Frameworks/Python.framework/"* ]]; then
+                  if [[ "$PYTHON_EXE" =~ /Versions/([0-9]+\.[0-9]+)/ ]]; then
+                    PYTHON_VER="${BASH_REMATCH[1]}"
+                    PYTHON_FRAMEWORK_BASE=$(echo "$PYTHON_EXE" | sed 's|/Frameworks/Python.framework/Versions/[^/]*/.*||')
+                    PYTHON_LIB_DIR="${PYTHON_FRAMEWORK_BASE}/Frameworks/Python.framework/Versions/${PYTHON_VER}/lib"
+                  else
+                    PYTHON_LIB_DIR=$(echo "$PYTHON_EXE" | sed 's|/Frameworks/Python.framework/Versions/[^/]*/bin/python.*|/Frameworks/Python.framework/Versions/|' | sed 's|/bin/python.*|/lib|')
+                  fi
+                else
+                  PYTHON_ROOT=$(dirname "$(dirname "$PYTHON_EXE")")
+                  PYTHON_LIB_DIR="$PYTHON_ROOT/lib"
+                fi
                 if [ -n "$PYTHON_LIB_DIR" ]; then
                   RPATH_FOUND=$(otool -l "$SO_FILE" 2>/dev/null | awk '/LC_RPATH/{found=1; next} found && /path /{print $2; found=0}' | grep -F "$PYTHON_LIB_DIR" || echo "")
                   if [ -n "$RPATH_FOUND" ]; then
@@ -375,6 +390,10 @@ jobs:
                     rm -rf "$TEMP_VERIFY"
                     exit 1
                   fi
+                else
+                  echo "⚠️  Warning: Could not determine Python library directory for verification"
+                  echo "  Showing all RPATH entries for manual verification:"
+                  otool -l "$SO_FILE" 2>/dev/null | awk '/LC_RPATH/{found=1; next} found && /path /{print "    " $2; found=0}'
                 fi
               fi
               rm -rf "$TEMP_VERIFY"
@@ -819,7 +838,22 @@ jobs:
               unzip -q "$WHEEL" -d "$TEMP_VERIFY" 2>/dev/null
               SO_FILE=$(find "$TEMP_VERIFY" -name "*.so" -type f | head -1)
               if [ -n "$SO_FILE" ]; then
-                PYTHON_LIB_DIR=$($PYTHON_EXE -c "import sysconfig; print(sysconfig.get_config_var('LIBDIR'))" 2>/dev/null || echo "")
+                # Use the same detection logic as the fix script
+                # CRITICAL: Don't use sysconfig in GitHub Actions - it returns wrong path
+                if [[ "$PYTHON_EXE" == *"/hostedtoolcache/Python/"* ]]; then
+                  PYTHON_LIB_DIR=$(echo "$PYTHON_EXE" | sed 's|/bin/python.*|/lib|')
+                elif [[ "$PYTHON_EXE" == *"/Frameworks/Python.framework/"* ]]; then
+                  if [[ "$PYTHON_EXE" =~ /Versions/([0-9]+\.[0-9]+)/ ]]; then
+                    PYTHON_VER="${BASH_REMATCH[1]}"
+                    PYTHON_FRAMEWORK_BASE=$(echo "$PYTHON_EXE" | sed 's|/Frameworks/Python.framework/Versions/[^/]*/.*||')
+                    PYTHON_LIB_DIR="${PYTHON_FRAMEWORK_BASE}/Frameworks/Python.framework/Versions/${PYTHON_VER}/lib"
+                  else
+                    PYTHON_LIB_DIR=$(echo "$PYTHON_EXE" | sed 's|/Frameworks/Python.framework/Versions/[^/]*/bin/python.*|/Frameworks/Python.framework/Versions/|' | sed 's|/bin/python.*|/lib|')
+                  fi
+                else
+                  PYTHON_ROOT=$(dirname "$(dirname "$PYTHON_EXE")")
+                  PYTHON_LIB_DIR="$PYTHON_ROOT/lib"
+                fi
                 if [ -n "$PYTHON_LIB_DIR" ]; then
                   RPATH_FOUND=$(otool -l "$SO_FILE" 2>/dev/null | awk '/LC_RPATH/{found=1; next} found && /path /{print $2; found=0}' | grep -F "$PYTHON_LIB_DIR" || echo "")
                   if [ -n "$RPATH_FOUND" ]; then
@@ -832,6 +866,10 @@ jobs:
                     rm -rf "$TEMP_VERIFY"
                     exit 1
                   fi
+                else
+                  echo "⚠️  Warning: Could not determine Python library directory for verification"
+                  echo "  Showing all RPATH entries for manual verification:"
+                  otool -l "$SO_FILE" 2>/dev/null | awk '/LC_RPATH/{found=1; next} found && /path /{print "    " $2; found=0}'
                 fi
               fi
               rm -rf "$TEMP_VERIFY"
