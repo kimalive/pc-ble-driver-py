@@ -402,8 +402,11 @@ jobs:
             fi
             # Try to import - we expect this to fail with ImportError (not segfault)
             # The important thing is to catch segfaults (exit code 139)
-            $TIMEOUT_CMD python -c 'import sys; import os; TEMP_DIR = os.environ.get("PYTHONPATH", "").split(":")[0] if os.environ.get("PYTHONPATH") else ""; [sys.path.insert(0, TEMP_DIR) for _ in [None] if TEMP_DIR]; sys.path = [p for p in sys.path if p and (TEMP_DIR in p or "site-packages" in p or "lib/python" in p or "Frameworks/Python.framework" in p)]; import pc_ble_driver_py; print("✓ Imported pc_ble_driver_py"); import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5; print("✓ Imported nrf_ble_driver_sd_api_v5"); print("✓ Wheel test passed (imports only)")' 2>&1 || true
+            # Run the test and capture exit code properly
+            set +e  # Don't exit on error - we want to check the exit code
+            $TIMEOUT_CMD python -c 'import sys; import os; TEMP_DIR = os.environ.get("PYTHONPATH", "").split(":")[0] if os.environ.get("PYTHONPATH") else ""; [sys.path.insert(0, TEMP_DIR) for _ in [None] if TEMP_DIR]; sys.path = [p for p in sys.path if p and (TEMP_DIR in p or "site-packages" in p or "lib/python" in p or "Frameworks/Python.framework" in p)]; import pc_ble_driver_py; print("✓ Imported pc_ble_driver_py"); import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5; print("✓ Imported nrf_ble_driver_sd_api_v5"); print("✓ Wheel test passed (imports only)")' 2>&1
             TEST_EXIT=$?
+            set -e  # Re-enable exit on error
             # Clean up temp install directory
             rm -rf "$TEMP_INSTALL_DIR" 2>/dev/null || true
             # Only fail on segfaults (exit code 139) - import errors are expected
@@ -826,8 +829,11 @@ jobs:
             fi
             # Try to import - we expect this to fail with ImportError (not segfault)
             # The important thing is to catch segfaults (exit code 139)
-            $TIMEOUT_CMD python -c 'import sys; import os; TEMP_DIR = os.environ.get("PYTHONPATH", "").split(":")[0] if os.environ.get("PYTHONPATH") else ""; [sys.path.insert(0, TEMP_DIR) for _ in [None] if TEMP_DIR]; sys.path = [p for p in sys.path if p and (TEMP_DIR in p or "site-packages" in p or "lib/python" in p or "Frameworks/Python.framework" in p)]; import pc_ble_driver_py; print("✓ Imported pc_ble_driver_py"); import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5; print("✓ Imported nrf_ble_driver_sd_api_v5"); print("✓ Wheel test passed (imports only)")' 2>&1 || true
+            # Run the test and capture exit code properly
+            set +e  # Don't exit on error - we want to check the exit code
+            $TIMEOUT_CMD python -c 'import sys; import os; TEMP_DIR = os.environ.get("PYTHONPATH", "").split(":")[0] if os.environ.get("PYTHONPATH") else ""; [sys.path.insert(0, TEMP_DIR) for _ in [None] if TEMP_DIR]; sys.path = [p for p in sys.path if p and (TEMP_DIR in p or "site-packages" in p or "lib/python" in p or "Frameworks/Python.framework" in p)]; import pc_ble_driver_py; print("✓ Imported pc_ble_driver_py"); import pc_ble_driver_py.lib.nrf_ble_driver_sd_api_v5; print("✓ Imported nrf_ble_driver_sd_api_v5"); print("✓ Wheel test passed (imports only)")' 2>&1
             TEST_EXIT=$?
+            set -e  # Re-enable exit on error
             # Clean up temp install directory
             rm -rf "$TEMP_INSTALL_DIR" 2>/dev/null || true
             # Only fail on segfaults (exit code 139) - import errors are expected
