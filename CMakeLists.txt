@@ -20,22 +20,9 @@ set(PYTHON_LIBRARY_FROM_USER_FLAGS "${PYTHON_LIBRARY}")
 # (e.g., Python 3.13 when building for Python 3.8)
 # Note: The post-build fix script (fix_wheel_python_linking.sh) will correct any linking issues
 # if the library detection here fails, so we make this optional to avoid CMake parse errors
+# We skip the early detection to avoid CMake quote parsing issues - the post-build script handles it
 if(PYTHON_EXECUTABLE AND APPLE)
-    # Try to get Python library path - if this fails, the post-build script will fix it
-    # Use a simpler approach to avoid CMake quote parsing issues
-    execute_process(
-        COMMAND ${PYTHON_EXECUTABLE} -c "import sysconfig; print(sysconfig.get_config_var('LIBDIR') + '/' + sysconfig.get_config_var('LIBRARY') if sysconfig.get_config_var('LIBRARY') else sysconfig.get_config_var('LIBDIR'))"
-        OUTPUT_VARIABLE PYTHON_LIB_FROM_EXE
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        ERROR_QUIET
-    )
-    
-    if(PYTHON_LIB_FROM_EXE AND EXISTS "${PYTHON_LIB_FROM_EXE}")
-        set(PYTHON_LIBRARY_FROM_USER_FLAGS "${PYTHON_LIB_FROM_EXE}")
-        message(STATUS "Using Python library from PYTHON_EXECUTABLE: ${PYTHON_LIBRARY_FROM_USER_FLAGS}")
-    else
-        message(STATUS "Python library detection skipped - post-build fix script will handle linking")
-    endif()
+    message(STATUS "Python library detection deferred - post-build fix script will handle linking")
 endif()
 
 # Use non-debug version of python, even when building a debug version 
