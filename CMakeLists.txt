@@ -1,8 +1,31 @@
 cmake_minimum_required(VERSION 3.20)
 
-if(DEFINED ENV{VCPKG_ROOT} AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
-    set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
-        CACHE STRING "")
+# Auto-detect vcpkg if not explicitly set
+if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
+    # First check VCPKG_ROOT environment variable
+    if(DEFINED ENV{VCPKG_ROOT})
+        set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+            CACHE STRING "")
+        message(STATUS "Using vcpkg from VCPKG_ROOT: $ENV{VCPKG_ROOT}")
+    else
+        # Try common vcpkg locations
+        set(VCPKG_SEARCH_PATHS
+            "$ENV{HOME}/vcpkg"
+            "$ENV{HOME}/.vcpkg"
+            "/usr/local/vcpkg"
+            "/opt/vcpkg"
+        )
+        
+        foreach(vcpkg_path ${VCPKG_SEARCH_PATHS})
+            if(EXISTS "${vcpkg_path}/scripts/buildsystems/vcpkg.cmake")
+                set(CMAKE_TOOLCHAIN_FILE "${vcpkg_path}/scripts/buildsystems/vcpkg.cmake"
+                    CACHE STRING "")
+                set(ENV{VCPKG_ROOT} "${vcpkg_path}")
+                message(STATUS "Auto-detected vcpkg at: ${vcpkg_path}")
+                break()
+            endif()
+        endforeach()
+    endif()
 endif()
 # Name of the project
 project (pc-ble-driver-py)
