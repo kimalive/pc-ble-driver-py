@@ -7,20 +7,13 @@ if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
         set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
             CACHE STRING "")
         message(STATUS "Using vcpkg from VCPKG_ROOT: $ENV{VCPKG_ROOT}")
-    else
+    else()
         # Try common vcpkg locations
-        set(VCPKG_SEARCH_PATHS
-            "$ENV{HOME}/vcpkg"
-            "$ENV{HOME}/.vcpkg"
-            "/usr/local/vcpkg"
-            "/opt/vcpkg"
-        )
-        
+        set(VCPKG_SEARCH_PATHS "$ENV{HOME}/vcpkg" "$ENV{HOME}/.vcpkg" "/usr/local/vcpkg" "/opt/vcpkg")
         foreach(vcpkg_path ${VCPKG_SEARCH_PATHS})
             if(EXISTS "${vcpkg_path}/scripts/buildsystems/vcpkg.cmake")
                 set(CMAKE_TOOLCHAIN_FILE "${vcpkg_path}/scripts/buildsystems/vcpkg.cmake"
                     CACHE STRING "")
-                set(ENV{VCPKG_ROOT} "${vcpkg_path}")
                 message(STATUS "Auto-detected vcpkg at: ${vcpkg_path}")
                 break()
             endif()
