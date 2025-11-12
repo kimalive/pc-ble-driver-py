@@ -357,20 +357,23 @@ jobs:
             if bash ${{ github.workspace }}/fix_wheel_python_linking.sh "$WHEEL" "$PYTHON_EXE"; then
               echo "✓ Fix script completed successfully"
               # Verify the fix was applied
-              echo "Verifying RPATH was added..."
+              echo "Verifying @loader_path was applied..."
               TEMP_VERIFY=$(mktemp -d)
               unzip -q "$WHEEL" -d "$TEMP_VERIFY" 2>/dev/null
               SO_FILE=$(find "$TEMP_VERIFY" -name "*.so" -type f | head -1)
               if [ -n "$SO_FILE" ]; then
-                # Verify that Python library link uses @executable_path (portable, no hardcoded paths)
+                # Verify that Python library link uses @loader_path (portable, no hardcoded paths)
                 PYTHON_VER=$($PYTHON_EXE -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null)
-                EXPECTED_LINK="@executable_path/../lib/libpython${PYTHON_VER}.dylib"
+                EXPECTED_LINK="@loader_path/../../../../libpython${PYTHON_VER}.dylib"
                 CURRENT_LINK=$(otool -L "$SO_FILE" 2>/dev/null | grep -E "(python|Python)" | awk '{print $1}' | head -1 || echo "")
-                if echo "$CURRENT_LINK" | grep -q "@executable_path/../lib/libpython${PYTHON_VER}.dylib"; then
-                  echo "✓ Verified: Python library link uses @executable_path (portable): $CURRENT_LINK"
+                if echo "$CURRENT_LINK" | grep -q "@loader_path/../../../../libpython${PYTHON_VER}.dylib"; then
+                  echo "✓ Verified: Python library link uses @loader_path (portable): $CURRENT_LINK"
                 elif echo "$CURRENT_LINK" | grep -q "@rpath/libpython${PYTHON_VER}.dylib"; then
                   echo "⚠️  Warning: Python library link still uses @rpath (will be fixed by fix script): $CURRENT_LINK"
-                  echo "  This is OK - the fix script will change it to @executable_path"
+                  echo "  This is OK - the fix script will change it to @loader_path"
+                elif echo "$CURRENT_LINK" | grep -q "@executable_path"; then
+                  echo "⚠️  Warning: Python library link still uses @executable_path (will be fixed by fix script): $CURRENT_LINK"
+                  echo "  This is OK - the fix script will change it to @loader_path"
                 else
                   echo "✗ ERROR: Python library link verification failed"
                   echo "  Expected: $EXPECTED_LINK"
@@ -378,16 +381,16 @@ jobs:
                   rm -rf "$TEMP_VERIFY"
                   exit 1
                 fi
-                # With @executable_path, we don't need RPATH - verify no hardcoded paths
-                HARDCODED_RPATHS=$(otool -l "$SO_FILE" 2>/dev/null | awk '/LC_RPATH/{found=1; next} found && /path /{print $2; found=0}' | grep -v "@loader_path" | grep -v "@executable_path" || true)
+                # With @loader_path, we don't need RPATH - verify no hardcoded paths
+                HARDCODED_RPATHS=$(otool -l "$SO_FILE" 2>/dev/null | awk '/LC_RPATH/{found=1; next} found && /path /{print $2; found=0}' || true)
                 if [ -n "$HARDCODED_RPATHS" ]; then
-                  echo "⚠️  Warning: Found hardcoded RPATH entries (will be removed by fix script):"
+                  echo "⚠️  Warning: Found RPATH entries (will be removed by fix script - not needed with @loader_path):"
                   echo "$HARDCODED_RPATHS" | while IFS= read -r rpath; do
                     echo "    $rpath"
                   done
                   echo "  This is OK - the fix script will remove them"
                 else
-                  echo "✓ Verified: No hardcoded RPATH entries (only @loader_path, which is OK)"
+                  echo "✓ Verified: No RPATH entries (correct - @loader_path doesn't need RPATH)"
                 fi
               fi
               rm -rf "$TEMP_VERIFY"
@@ -827,20 +830,23 @@ jobs:
             if bash ${{ github.workspace }}/fix_wheel_python_linking.sh "$WHEEL" "$PYTHON_EXE"; then
               echo "✓ Fix script completed successfully"
               # Verify the fix was applied
-              echo "Verifying RPATH was added..."
+              echo "Verifying @loader_path was applied..."
               TEMP_VERIFY=$(mktemp -d)
               unzip -q "$WHEEL" -d "$TEMP_VERIFY" 2>/dev/null
               SO_FILE=$(find "$TEMP_VERIFY" -name "*.so" -type f | head -1)
               if [ -n "$SO_FILE" ]; then
-                # Verify that Python library link uses @executable_path (portable, no hardcoded paths)
+                # Verify that Python library link uses @loader_path (portable, no hardcoded paths)
                 PYTHON_VER=$($PYTHON_EXE -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null)
-                EXPECTED_LINK="@executable_path/../lib/libpython${PYTHON_VER}.dylib"
+                EXPECTED_LINK="@loader_path/../../../../libpython${PYTHON_VER}.dylib"
                 CURRENT_LINK=$(otool -L "$SO_FILE" 2>/dev/null | grep -E "(python|Python)" | awk '{print $1}' | head -1 || echo "")
-                if echo "$CURRENT_LINK" | grep -q "@executable_path/../lib/libpython${PYTHON_VER}.dylib"; then
-                  echo "✓ Verified: Python library link uses @executable_path (portable): $CURRENT_LINK"
+                if echo "$CURRENT_LINK" | grep -q "@loader_path/../../../../libpython${PYTHON_VER}.dylib"; then
+                  echo "✓ Verified: Python library link uses @loader_path (portable): $CURRENT_LINK"
                 elif echo "$CURRENT_LINK" | grep -q "@rpath/libpython${PYTHON_VER}.dylib"; then
                   echo "⚠️  Warning: Python library link still uses @rpath (will be fixed by fix script): $CURRENT_LINK"
-                  echo "  This is OK - the fix script will change it to @executable_path"
+                  echo "  This is OK - the fix script will change it to @loader_path"
+                elif echo "$CURRENT_LINK" | grep -q "@executable_path"; then
+                  echo "⚠️  Warning: Python library link still uses @executable_path (will be fixed by fix script): $CURRENT_LINK"
+                  echo "  This is OK - the fix script will change it to @loader_path"
                 else
                   echo "✗ ERROR: Python library link verification failed"
                   echo "  Expected: $EXPECTED_LINK"
@@ -848,16 +854,16 @@ jobs:
                   rm -rf "$TEMP_VERIFY"
                   exit 1
                 fi
-                # With @executable_path, we don't need RPATH - verify no hardcoded paths
-                HARDCODED_RPATHS=$(otool -l "$SO_FILE" 2>/dev/null | awk '/LC_RPATH/{found=1; next} found && /path /{print $2; found=0}' | grep -v "@loader_path" | grep -v "@executable_path" || true)
+                # With @loader_path, we don't need RPATH - verify no hardcoded paths
+                HARDCODED_RPATHS=$(otool -l "$SO_FILE" 2>/dev/null | awk '/LC_RPATH/{found=1; next} found && /path /{print $2; found=0}' || true)
                 if [ -n "$HARDCODED_RPATHS" ]; then
-                  echo "⚠️  Warning: Found hardcoded RPATH entries (will be removed by fix script):"
+                  echo "⚠️  Warning: Found RPATH entries (will be removed by fix script - not needed with @loader_path):"
                   echo "$HARDCODED_RPATHS" | while IFS= read -r rpath; do
                     echo "    $rpath"
                   done
                   echo "  This is OK - the fix script will remove them"
                 else
-                  echo "✓ Verified: No hardcoded RPATH entries (only @loader_path, which is OK)"
+                  echo "✓ Verified: No RPATH entries (correct - @loader_path doesn't need RPATH)"
                 fi
               fi
               rm -rf "$TEMP_VERIFY"

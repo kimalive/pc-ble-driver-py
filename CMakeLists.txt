@@ -254,17 +254,20 @@ foreach(SD_API_VER ${SD_API_VERS})
                 
                 if(EXISTS "${PYTHON_LIB_PATH_FROM_EXE}")
                     set(PYTHON_LIB_TO_FIX "${PYTHON_LIB_PATH_FROM_EXE}")
-                    # Determine @rpath name based on library type
+                    # Determine @loader_path name based on library type
+                    # @loader_path = site-packages/pc_ble_driver_py/lib/ (where .so is)
+                    # ../../../../ = goes up to <python_root>/lib/
+                    # libpython3.X.dylib = Python library
                     get_filename_component(PYTHON_LIB_NAME ${PYTHON_LIB_PATH_FROM_EXE} NAME)
                     if(PYTHON_LIB_NAME MATCHES "libpython([0-9]+\\.[0-9]+)\\.dylib")
-                        # Use @executable_path instead of @rpath for portability (no hardcoded paths needed)
-                        set(PYTHON_LIB_RPATH_NAME "@executable_path/../lib/libpython${PYTHON_VERSION_MAJOR_MINOR}.dylib")
+                        # Use @loader_path with relative path - portable, no build-time paths
+                        set(PYTHON_LIB_RPATH_NAME "@loader_path/../../../../libpython${PYTHON_VERSION_MAJOR_MINOR}.dylib")
                     elseif(PYTHON_LIB_NAME STREQUAL "Python" OR PYTHON_LIB_PATH_FROM_EXE MATCHES "Python.framework")
-                        set(PYTHON_LIB_RPATH_NAME "@executable_path/../lib/Python")
+                        set(PYTHON_LIB_RPATH_NAME "@loader_path/../../../../Python")
                         # Extract framework path
                         string(REGEX REPLACE "/lib/.*" "/Python" PYTHON_FRAMEWORK_PATH "${PYTHON_LIB_PATH_FROM_EXE}")
                     else()
-                        set(PYTHON_LIB_RPATH_NAME "@rpath/${PYTHON_LIB_NAME}")
+                        set(PYTHON_LIB_RPATH_NAME "@loader_path/../../../../${PYTHON_LIB_NAME}")
                     endif()
                     message(STATUS "Determined Python library from PYTHON_EXECUTABLE: ${PYTHON_LIB_TO_FIX} -> ${PYTHON_LIB_RPATH_NAME}")
                 endif()
@@ -279,12 +282,12 @@ foreach(SD_API_VER ${SD_API_VERS})
             
             if(PYTHON_LIB_NAME MATCHES "libpython([0-9]+\\.[0-9]+)\\.dylib")
                 set(PYTHON_VERSION_MAJOR_MINOR ${CMAKE_MATCH_1})
-                # Use @executable_path instead of @rpath for portability (no hardcoded paths needed)
-                set(PYTHON_LIB_RPATH_NAME "@executable_path/../lib/libpython${PYTHON_VERSION_MAJOR_MINOR}.dylib")
+                # Use @loader_path with relative path - portable, no build-time paths
+                set(PYTHON_LIB_RPATH_NAME "@loader_path/../../../../libpython${PYTHON_VERSION_MAJOR_MINOR}.dylib")
             elseif(PYTHON_LIB_NAME STREQUAL "Python")
-                set(PYTHON_LIB_RPATH_NAME "@executable_path/../lib/Python")
+                set(PYTHON_LIB_RPATH_NAME "@loader_path/../../../../Python")
             else()
-                set(PYTHON_LIB_RPATH_NAME "@rpath/${PYTHON_LIB_NAME}")
+                set(PYTHON_LIB_RPATH_NAME "@loader_path/../../../../${PYTHON_LIB_NAME}")
             endif()
             
             if(PYTHON_LIB_DIR MATCHES "Python.framework")
@@ -297,20 +300,19 @@ foreach(SD_API_VER ${SD_API_VERS})
             message(VERBOSE "Fixing Python library path: ${PYTHON_LIB_TO_FIX} -> ${PYTHON_LIB_RPATH_NAME}")
             
             # Add a post-build step to change the install name using install_name_tool
-            # This changes the hardcoded absolute path to @executable_path, which is portable
-            # @executable_path is resolved relative to the Python executable, so it works
-            # regardless of where Python is installed (no hardcoded paths needed)
+            # This changes the hardcoded absolute path to @loader_path with relative path
+            # @loader_path/../../../../libpython3.X.dylib is portable and works in any Python environment
             if(PYTHON_FRAMEWORK_PATH AND NOT PYTHON_FRAMEWORK_PATH STREQUAL PYTHON_LIB_TO_FIX)
                 add_custom_command(TARGET ${PYTHON_MODULE_${SD_API_VER}} POST_BUILD
                     COMMAND install_name_tool -change "${PYTHON_LIB_TO_FIX}" "${PYTHON_LIB_RPATH_NAME}" "$<TARGET_FILE:${PYTHON_MODULE_${SD_API_VER}}>" || true
                     COMMAND install_name_tool -change "${PYTHON_FRAMEWORK_PATH}" "${PYTHON_LIB_RPATH_NAME}" "$<TARGET_FILE:${PYTHON_MODULE_${SD_API_VER}}>" || true
-                    COMMENT "Fixing Python library path to use @executable_path (portable, no hardcoded paths)"
+                    COMMENT "Fixing Python library path to use @loader_path (portable, no hardcoded paths)"
                     VERBATIM
                 )
             else()
                 add_custom_command(TARGET ${PYTHON_MODULE_${SD_API_VER}} POST_BUILD
                     COMMAND install_name_tool -change "${PYTHON_LIB_TO_FIX}" "${PYTHON_LIB_RPATH_NAME}" "$<TARGET_FILE:${PYTHON_MODULE_${SD_API_VER}}>" || true
-                    COMMENT "Fixing Python library path to use @executable_path (portable, no hardcoded paths)"
+                    COMMENT "Fixing Python library path to use @loader_path (portable, no hardcoded paths)"
                     VERBATIM
                 )
             endif()

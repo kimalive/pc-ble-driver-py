@@ -36,27 +36,32 @@ if [ -z "$PYTHON_LIB_INFO" ]; then
     exit 1
 fi
 
-    # Determine expected library name - use @executable_path instead of @rpath for portability
-    # @executable_path is relative to the Python executable, so @executable_path/../lib/libpython3.X.dylib
-    # will always point to the correct Python library directory, regardless of installation location
+    # Determine expected library name - use @loader_path with relative path
+    # This is portable and works in any Python environment:
+    #   @loader_path = site-packages/pc_ble_driver_py/lib/ (where .so is)
+    #   ../../../../ = goes up to <python_root>/lib/
+    #   libpython3.X.dylib = Python library
+    # This avoids hardcoded build-time paths and doesn't require RPATH entries.
     if [ -f "$PYTHON_LIB_INFO" ]; then
         PYTHON_LIB_NAME=$(basename "$PYTHON_LIB_INFO")
         if [[ "$PYTHON_LIB_NAME" =~ libpython([0-9]+\.[0-9]+)\.dylib ]]; then
-            EXPECTED_RPATH="@executable_path/../lib/libpython${BASH_REMATCH[1]}.dylib"
+            EXPECTED_LINK="@loader_path/../../../../libpython${BASH_REMATCH[1]}.dylib"
         elif [ "$PYTHON_LIB_NAME" = "Python" ] || [[ "$PYTHON_LIB_INFO" =~ Python.framework ]]; then
-            EXPECTED_RPATH="@executable_path/../lib/Python"
+            # For framework builds, use @loader_path with relative path
+            EXPECTED_LINK="@loader_path/../../../../Python"
         else
-            EXPECTED_RPATH="@executable_path/../lib/$PYTHON_LIB_NAME"
+            EXPECTED_LINK="@loader_path/../../../../$PYTHON_LIB_NAME"
         fi
     else
         # If library file doesn't exist, try to determine from version
-        EXPECTED_RPATH="@executable_path/../lib/libpython${PYTHON_VER}.dylib"
+        EXPECTED_LINK="@loader_path/../../../../libpython${PYTHON_VER}.dylib"
     fi
 
 echo "Python version: $PYTHON_VER"
 echo "Python library: $PYTHON_LIB_INFO"
-echo "Expected library link: $EXPECTED_RPATH"
-echo "Note: Using @executable_path instead of @rpath for portability (no hardcoded paths needed)"
+echo "Expected library link: $EXPECTED_LINK"
+echo "Note: Using @loader_path with relative path - portable, no build-time paths"
+echo "      Path: site-packages/pc_ble_driver_py/lib/ -> ../../../../ -> <python_root>/lib/"
 echo ""
 
 # Extract wheel to temporary directory
@@ -88,17 +93,24 @@ for SO_FILE in $SO_FILES; do
     
     NEEDS_FIX=0
     for LINK in $CURRENT_LINKS; do
-        # Check if link is hardcoded path (not @executable_path, @rpath, or @loader_path)
-        if [[ "$LINK" != @executable_path* ]] && [[ "$LINK" != @rpath* ]] && [[ "$LINK" != @loader_path* ]]; then
+        # Check if link is hardcoded path (not @loader_path or @rpath)
+        if [[ "$LINK" != @loader_path* ]] && [[ "$LINK" != @rpath* ]]; then
             echo "  Found hardcoded path: $LINK"
             NEEDS_FIX=1
-        # Check if link is @rpath (we want to change this to @executable_path for portability)
+        # Check if link is @rpath (we want to change this to @loader_path)
         elif [[ "$LINK" =~ @rpath/libpython([0-9]+\.[0-9]+)\.dylib ]]; then
-            echo "  Found @rpath link (will change to @executable_path for portability): $LINK"
+            echo "  Found @rpath link (will change to @loader_path): $LINK"
             NEEDS_FIX=1
-        # Check if link is wrong @executable_path version
-        elif [[ "$LINK" =~ @executable_path/../lib/libpython([0-9]+\.[0-9]+)\.dylib ]] && [ "${BASH_REMATCH[1]}" != "$PYTHON_VER" ]; then
+        # Check if link is wrong @loader_path version or structure
+        elif [[ "$LINK" =~ @loader_path.*libpython([0-9]+\.[0-9]+)\.dylib ]] && [ "${BASH_REMATCH[1]}" != "$PYTHON_VER" ]; then
             echo "  Found wrong Python version: $LINK (expected $PYTHON_VER)"
+            NEEDS_FIX=1
+        elif [[ "$LINK" =~ @loader_path ]] && [[ "$LINK" != "$EXPECTED_LINK" ]]; then
+            echo "  Found @loader_path with wrong structure: $LINK"
+            NEEDS_FIX=1
+        # Check if link is @executable_path (we want to change this to @loader_path)
+        elif [[ "$LINK" =~ @executable_path ]]; then
+            echo "  Found @executable_path link (will change to @loader_path): $LINK"
             NEEDS_FIX=1
         fi
     done
@@ -108,9 +120,9 @@ for SO_FILE in $SO_FILES; do
         
         # Fix all Python library links
         for LINK in $CURRENT_LINKS; do
-            if [[ "$LINK" != "$EXPECTED_RPATH" ]]; then
-                echo "    Changing: $LINK -> $EXPECTED_RPATH"
-                install_name_tool -change "$LINK" "$EXPECTED_RPATH" "$SO_FILE" 2>/dev/null || {
+            if [[ "$LINK" != "$EXPECTED_LINK" ]]; then
+                echo "    Changing: $LINK -> $EXPECTED_LINK"
+                install_name_tool -change "$LINK" "$EXPECTED_LINK" "$SO_FILE" 2>/dev/null || {
                     echo "    ⚠️  Warning: Failed to change $LINK"
                 }
             fi
@@ -118,42 +130,35 @@ for SO_FILE in $SO_FILES; do
         FIXED_ANY=1
     fi
     
-    # With @executable_path, we don't need RPATH at all!
-    # @executable_path is resolved relative to the Python executable that loads the .so file,
-    # so @executable_path/../lib/libpython3.X.dylib will always work regardless of where
-    # Python is installed (pyenv, Homebrew, GitHub Actions, system Python, etc.)
-    # 
-    # However, we should still remove any incorrect hardcoded RPATH entries that might
-    # have been added during the build process.
+    # With @loader_path, we don't need RPATH entries - the relative path
+    # from the .so file location works directly. However, we should remove
+    # any incorrect hardcoded RPATH entries that might have been added.
+    
+    # Get current RPATH entries and remove all of them (we don't need RPATH with @loader_path)
     CURRENT_RPATHS=$(otool -l "$SO_FILE" 2>/dev/null | awk '/LC_RPATH/{found=1; next} found && /path /{print $2; found=0}' || true)
     
-    # Remove all hardcoded RPATH entries - they're not needed with @executable_path
-    # and they cause portability issues
+    # Remove all RPATH entries - we don't need them with @loader_path
     if [ -n "$CURRENT_RPATHS" ]; then
         while IFS= read -r RPATH_ENTRY; do
-            # Remove all hardcoded paths (not @loader_path or @executable_path)
-            if [[ "$RPATH_ENTRY" != @loader_path* ]] && [[ "$RPATH_ENTRY" != @executable_path* ]]; then
-                echo "  Removing hardcoded rpath (not needed with @executable_path): $RPATH_ENTRY"
-                install_name_tool -delete_rpath "$RPATH_ENTRY" "$SO_FILE" 2>/dev/null || {
-                    echo "  ⚠️  Warning: Failed to remove rpath (may not exist)"
-                }
-                FIXED_ANY=1
-            fi
+            echo "  Removing rpath (not needed with @loader_path): $RPATH_ENTRY"
+            install_name_tool -delete_rpath "$RPATH_ENTRY" "$SO_FILE" 2>/dev/null || true
+            FIXED_ANY=1
         done <<< "$CURRENT_RPATHS"
     fi
     
-    # Verify fix
-    if [ $NEEDS_FIX -eq 1 ] || [ $FIXED_ANY -eq 1 ]; then
-        VERIFIED_LINKS=$(otool -L "$SO_FILE" 2>/dev/null | grep -E "(python|Python)" | awk '{print $1}' || true)
-        if echo "$VERIFIED_LINKS" | grep -q "$EXPECTED_RPATH"; then
-            echo "  ✓ Fixed successfully"
-        else
-            echo "  ✗ Fix verification failed"
-            echo "    Current links: $VERIFIED_LINKS"
-        fi
-    else
-        echo "  ✓ Already correctly linked"
-    fi
+           # Verify fix
+           if [ $NEEDS_FIX -eq 1 ] || [ $FIXED_ANY -eq 1 ]; then
+               VERIFIED_LINKS=$(otool -L "$SO_FILE" 2>/dev/null | grep -E "(python|Python)" | awk '{print $1}' || true)
+               if echo "$VERIFIED_LINKS" | grep -q "$EXPECTED_LINK"; then
+                   echo "  ✓ Fixed successfully"
+               else
+                   echo "  ✗ Fix verification failed"
+                   echo "    Expected: $EXPECTED_LINK"
+                   echo "    Current links: $VERIFIED_LINKS"
+               fi
+           else
+               echo "  ✓ Already correctly linked"
+           fi
     echo ""
 done
 
@@ -181,26 +186,25 @@ echo "=== Verification ==="
 TEMP_DIR2=$(mktemp -d)
 unzip -q "$WHEEL_PATH" -d "$TEMP_DIR2"
 SO_FILE=$(find "$TEMP_DIR2" -name "*.so" -type f | head -1)
-if [ -n "$SO_FILE" ]; then
-    echo "Final Python library links:"
-    otool -L "$SO_FILE" 2>/dev/null | grep -E "(python|Python)" || echo "  None found"
-    echo ""
-    echo "Final RPATH entries:"
-    RPATH_ENTRIES=$(otool -l "$SO_FILE" 2>/dev/null | awk '/LC_RPATH/{found=1; next} found && /path /{print $2; found=0}' || true)
-    if [ -n "$RPATH_ENTRIES" ]; then
-        echo "$RPATH_ENTRIES" | while IFS= read -r rpath; do
-            if [[ "$rpath" == @loader_path* ]] || [[ "$rpath" == @executable_path* ]]; then
-                echo "  $rpath (OK - relative path)"
-            else
-                echo "  $rpath (WARNING - hardcoded path, should be removed)"
-            fi
-        done
-    else
-        echo "  ✓ No RPATH entries needed (using @executable_path for Python library)"
-    fi
-fi
-rm -rf "$TEMP_DIR2"
-
-# With @executable_path, we don't need to check for Python library directory
-# The library link @executable_path/../lib/libpython3.X.dylib will work automatically
+       if [ -n "$SO_FILE" ]; then
+           echo "Final Python library links:"
+           otool -L "$SO_FILE" 2>/dev/null | grep -E "(python|Python)" || echo "  None found"
+           echo ""
+           echo "RPATH entries (should be empty with @loader_path):"
+           RPATH_ENTRIES=$(otool -l "$SO_FILE" 2>/dev/null | awk '/LC_RPATH/{found=1; next} found && /path /{print $2; found=0}' || true)
+           if [ -n "$RPATH_ENTRIES" ]; then
+               echo "$RPATH_ENTRIES" | while IFS= read -r rpath; do
+                   echo "  ⚠️  $rpath (should be removed - not needed with @loader_path)"
+               done
+           else
+               echo "  ✓ No RPATH entries (correct - @loader_path doesn't need RPATH)"
+           fi
+       fi
+       rm -rf "$TEMP_DIR2"
+       
+       # With @loader_path, we use a relative path from the .so file location:
+       #   @loader_path = site-packages/pc_ble_driver_py/lib/ (where .so is)
+       #   ../../../../ = goes up to <python_root>/lib/
+       #   libpython3.X.dylib = Python library
+       # This is portable and works in any Python environment without build-time paths.
 
