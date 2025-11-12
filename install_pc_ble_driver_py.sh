@@ -142,8 +142,14 @@ if [ "$INSTALL_LOCAL" = true ]; then
     
     # Check if vcpkg is needed
     if [ -z "$VCPKG_ROOT" ]; then
-        # Try to auto-detect
-        for location in "$HOME/vcpkg" "$HOME/.vcpkg" "/usr/local/vcpkg" "/opt/vcpkg"; do
+        # Determine preferred location (same logic as main installation)
+        if command -v brew &> /dev/null; then
+            PREFERRED_VCPKG_LOCATION="$(brew --prefix)/vcpkg"
+        else
+            PREFERRED_VCPKG_LOCATION="/usr/local/vcpkg"
+        fi
+        # Try to auto-detect (check preferred location first, then common locations)
+        for location in "$PREFERRED_VCPKG_LOCATION" "$HOME/.local/vcpkg" "$HOME/.vcpkg" "/usr/local/vcpkg" "/opt/vcpkg"; do
             if [ -d "$location" ] && [ -f "$location/scripts/buildsystems/vcpkg.cmake" ]; then
                 export VCPKG_ROOT="$location"
                 export CMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
@@ -200,7 +206,14 @@ elif [ "$INSTALL_FROM_SOURCE" = true ]; then
     
     # Check for vcpkg (same logic as in else block)
     if [ -z "$VCPKG_ROOT" ]; then
-        for location in "$HOME/vcpkg" "$HOME/.vcpkg" "/usr/local/vcpkg" "/opt/vcpkg"; do
+        # Determine preferred location (same logic as main installation)
+        if command -v brew &> /dev/null; then
+            PREFERRED_VCPKG_LOCATION="$(brew --prefix)/vcpkg"
+        else
+            PREFERRED_VCPKG_LOCATION="/usr/local/vcpkg"
+        fi
+        # Try to auto-detect (check preferred location first, then common locations)
+        for location in "$PREFERRED_VCPKG_LOCATION" "$HOME/.local/vcpkg" "$HOME/.vcpkg" "/usr/local/vcpkg" "/opt/vcpkg"; do
             if [ -d "$location" ] && [ -f "$location/scripts/buildsystems/vcpkg.cmake" ]; then
                 export VCPKG_ROOT="$location"
                 export CMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
@@ -254,8 +267,19 @@ else
     
     # Check for vcpkg
     if [ -z "$VCPKG_ROOT" ]; then
-        # Try to auto-detect
-        for location in "$HOME/vcpkg" "$HOME/.vcpkg" "/usr/local/vcpkg" "/opt/vcpkg"; do
+        # Determine best vcpkg installation location
+        # Prefer Homebrew location if Homebrew is installed
+        if command -v brew &> /dev/null; then
+            HOMEBREW_PREFIX=$(brew --prefix)
+            # Use Homebrew's prefix directory for vcpkg repository
+            PREFERRED_VCPKG_LOCATION="$HOMEBREW_PREFIX/vcpkg"
+        else
+            # Fall back to system location
+            PREFERRED_VCPKG_LOCATION="/usr/local/vcpkg"
+        fi
+        
+        # Try to auto-detect vcpkg repository (check preferred location first, then common locations)
+        for location in "$PREFERRED_VCPKG_LOCATION" "$HOME/.local/vcpkg" "$HOME/.vcpkg" "/usr/local/vcpkg" "/opt/vcpkg"; do
             if [ -d "$location" ] && [ -f "$location/scripts/buildsystems/vcpkg.cmake" ]; then
                 export VCPKG_ROOT="$location"
                 export CMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
@@ -273,39 +297,81 @@ else
         if [ -z "$VCPKG_ROOT" ]; then
             echo "⚠️  vcpkg not found. Source installation requires vcpkg."
             echo ""
+            
+            # Determine installation location
+            if command -v brew &> /dev/null; then
+                HOMEBREW_PREFIX=$(brew --prefix)
+                VCPKG_ROOT="$HOMEBREW_PREFIX/vcpkg"
+                echo "vcpkg will be installed to: $VCPKG_ROOT"
+                echo "(Using Homebrew prefix location - cleaner than home directory)"
+            else
+                VCPKG_ROOT="/usr/local/vcpkg"
+                echo "vcpkg will be installed to: $VCPKG_ROOT"
+                echo "(System-wide location - may require sudo for first-time setup)"
+            fi
+            echo "This is a one-time setup that can be reused for all Python projects."
+            echo ""
+            
             if [ "$NON_INTERACTIVE" = false ]; then
-                read -p "Would you like to download and set up vcpkg automatically? (y/n) " -n 1 -r
-                echo
-                if [[ $REPLY =~ ^[Yy]$ ]]; then
-                    VCPKG_ROOT="$HOME/vcpkg"
-                    echo "Downloading vcpkg to $VCPKG_ROOT..."
-                    if [ -d "$VCPKG_ROOT" ]; then
-                        cd "$VCPKG_ROOT"
-                        git pull || true
-                    else
-                        git clone https://github.com/Microsoft/vcpkg.git "$VCPKG_ROOT"
-                        cd "$VCPKG_ROOT"
-                        ./bootstrap-vcpkg.sh
-                    fi
-                    export VCPKG_ROOT
-                    export CMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
-                    ARCH=$(uname -m)
-                    if [[ "$ARCH" == "arm64" ]]; then
-                        export CMAKE_PREFIX_PATH="$VCPKG_ROOT/installed/arm64-osx"
-                    else
-                        export CMAKE_PREFIX_PATH="$VCPKG_ROOT/installed/x64-osx"
-                    fi
-                    
-                    # Install nrf-ble-driver
-                    echo ""
-                    echo "Installing nrf-ble-driver (this may take 10-20 minutes)..."
-                    "$VCPKG_ROOT/vcpkg" install nrf-ble-driver --triplet "$(basename $CMAKE_PREFIX_PATH)"
-                else
-                    echo "Please set VCPKG_ROOT or use ./install.sh for automated setup"
-                    exit 1
+                # Clone vcpkg repository to preferred location
+                # Note: We only need the repository (which includes executable after bootstrap)
+                # Homebrew vcpkg only provides the executable, but we still need the repository
+                # for package definitions, so we just clone and bootstrap the repository.
+                echo ""
+                echo "Setting up vcpkg repository at: $VCPKG_ROOT"
+                
+                # Check if we can write to the location
+                if [ ! -w "$(dirname "$VCPKG_ROOT")" ] && [ "$VCPKG_ROOT" != "$HOME/.local/vcpkg" ] && [ "$VCPKG_ROOT" != "$HOME/.vcpkg" ]; then
+                    echo "⚠️  Cannot write to $VCPKG_ROOT (may require sudo)"
+                    echo "Falling back to user-accessible location: $HOME/.local/vcpkg"
+                    VCPKG_ROOT="$HOME/.local/vcpkg"
+                    mkdir -p "$(dirname "$VCPKG_ROOT")"
                 fi
+                
+                if [ -d "$VCPKG_ROOT" ]; then
+                    echo "Repository already exists, updating..."
+                    cd "$VCPKG_ROOT"
+                    git pull || true
+                else
+                    echo "Cloning vcpkg repository..."
+                    git clone https://github.com/Microsoft/vcpkg.git "$VCPKG_ROOT"
+                    cd "$VCPKG_ROOT"
+                    echo "Bootstrapping vcpkg (building executable)..."
+                    ./bootstrap-vcpkg.sh
+                fi
+                
+                export VCPKG_ROOT
+                export CMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+                ARCH=$(uname -m)
+                if [[ "$ARCH" == "arm64" ]]; then
+                    export CMAKE_PREFIX_PATH="$VCPKG_ROOT/installed/arm64-osx"
+                else
+                    export CMAKE_PREFIX_PATH="$VCPKG_ROOT/installed/x64-osx"
+                fi
+                
+                # Use vcpkg executable from repository (bootstrap creates it)
+                VCPKG_CMD="$VCPKG_ROOT/vcpkg"
+                
+                # Install nrf-ble-driver
+                echo ""
+                echo "Installing nrf-ble-driver (this may take 10-20 minutes)..."
+                "$VCPKG_CMD" install nrf-ble-driver --triplet "$(basename $CMAKE_PREFIX_PATH)"
             else
                 echo "Please set VCPKG_ROOT or use ./install.sh for automated setup"
+                echo ""
+                echo "To install vcpkg manually:"
+                if command -v brew &> /dev/null; then
+                    HOMEBREW_PREFIX=$(brew --prefix)
+                    echo "  git clone https://github.com/Microsoft/vcpkg.git $HOMEBREW_PREFIX/vcpkg"
+                    echo "  cd $HOMEBREW_PREFIX/vcpkg"
+                    echo "  ./bootstrap-vcpkg.sh"
+                    echo "  export VCPKG_ROOT=$HOMEBREW_PREFIX/vcpkg"
+                else
+                    echo "  git clone https://github.com/Microsoft/vcpkg.git /usr/local/vcpkg"
+                    echo "  cd /usr/local/vcpkg"
+                    echo "  ./bootstrap-vcpkg.sh"
+                    echo "  export VCPKG_ROOT=/usr/local/vcpkg"
+                fi
                 exit 1
             fi
         fi
@@ -323,6 +389,7 @@ else
         echo ""
         echo "nrf-ble-driver not found. Installing..."
         echo "This may take 10-20 minutes (first time only)..."
+        # Use vcpkg executable from repository
         "$VCPKG_ROOT/vcpkg" install nrf-ble-driver --triplet "$VCPKG_TRIPLET"
         if [ $? -eq 0 ]; then
             echo "✓ nrf-ble-driver installed successfully"

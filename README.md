@@ -21,7 +21,23 @@ The original project by Nordic has been deprecated and hasn't seen any new relea
 pc-ble-driver-py does not implement or enable all of the features of the underlying pc-ble-driver (C/C++) library. Features have mostly been added on a need basis. Functions or features that have been added may also be lacking sub-features. However, as the underlying language bindings have been auto-generated, it is often the case that features can be made available by adding to the conversion-layer found in ´ble_driver.py´.
 If you find features missing that you would like to have in, you are welcome to propose an implementation through a pull request.
 
-## Installing from PyPI
+## Installation
+
+**For detailed installation instructions, see [INSTALL.md](INSTALL.md)**
+
+### Quick Install
+
+The easiest way to install `pc-ble-driver-py` is using the provided installation script:
+
+```bash
+curl -O https://raw.githubusercontent.com/kimalive/pc-ble-driver-py/master/install_pc_ble_driver_py.sh
+chmod +x install_pc_ble_driver_py.sh
+./install_pc_ble_driver_py.sh
+```
+
+This will install from source (ensures correct Python library linking) and automatically set up all dependencies.
+
+### Installing from Wheels
 
 **Note**: Fork is not available in pypi since it would break ABI. Instead use wheels directly from [release](https://github.com/embedded-community/pc-ble-driver-py/releases/latest) assets.
 
